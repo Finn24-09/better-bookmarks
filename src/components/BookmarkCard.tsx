@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ExternalLink, Edit, Trash2, Globe } from "lucide-react";
+import { ExternalLink, Edit, Trash2, Globe, MoreVertical } from "lucide-react";
 import type { Bookmark } from "../types/bookmark";
 import clsx from "clsx";
 
@@ -16,6 +16,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
+  const [showActions, setShowActions] = useState(false);
 
   const handleImageLoad = () => {
     setImageLoading(false);
@@ -73,8 +74,8 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           </div>
         )}
 
-        {/* Overlay with actions */}
-        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+        {/* Desktop Hover Overlay */}
+        <div className="hidden sm:flex absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 items-center justify-center opacity-0 group-hover:opacity-100">
           <div className="flex space-x-2">
             <button
               onClick={openBookmark}
@@ -97,6 +98,65 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
             >
               <Trash2 className="h-4 w-4 text-red-600" />
             </button>
+          </div>
+        </div>
+
+        {/* Mobile Actions Menu */}
+        <div className="sm:hidden absolute top-2 right-2">
+          <div className="relative">
+            <button
+              onClick={() => setShowActions(!showActions)}
+              className="p-2 bg-black bg-opacity-50 text-white rounded-full shadow-lg backdrop-blur-sm"
+              title="Actions"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+
+            {showActions && (
+              <>
+                {/* Backdrop */}
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowActions(false)}
+                />
+
+                {/* Actions Menu */}
+                <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px]">
+                  <button
+                    onClick={() => {
+                      openBookmark();
+                      setShowActions(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    <span>Open</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onEdit(bookmark);
+                      setShowActions(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    <Edit className="h-4 w-4" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onDelete(bookmark.id);
+                      setShowActions(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-2 text-red-600 dark:text-red-400"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

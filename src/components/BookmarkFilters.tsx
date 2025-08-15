@@ -6,16 +6,20 @@ import clsx from "clsx";
 
 interface BookmarkFiltersProps {
   selectedTags: string[];
+  tagFilterMode: "AND" | "OR";
   sortBy: SortOption;
   onTagsChange: (tags: string[]) => void;
+  onTagFilterModeChange: (mode: "AND" | "OR") => void;
   onSortChange: (sort: SortOption) => void;
   refreshTrigger?: number;
 }
 
 export const BookmarkFilters: React.FC<BookmarkFiltersProps> = ({
   selectedTags,
+  tagFilterMode,
   sortBy,
   onTagsChange,
+  onTagFilterModeChange,
   onSortChange,
   refreshTrigger,
 }) => {
@@ -61,7 +65,7 @@ export const BookmarkFilters: React.FC<BookmarkFiltersProps> = ({
               "flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors duration-200",
               showFilters
                 ? "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-                : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                : "text-black-700 dark:text-blakc-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             )}
           >
             <Filter className="h-4 w-4" />
@@ -101,7 +105,10 @@ export const BookmarkFilters: React.FC<BookmarkFiltersProps> = ({
               {/* Tags Filter */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <h3
+                    className="text-sm font-medium"
+                    style={{ color: "var(--text-primary)" }}
+                  >
                     Filter by Tags
                   </h3>
                   {hasActiveFilters && (
@@ -113,6 +120,60 @@ export const BookmarkFilters: React.FC<BookmarkFiltersProps> = ({
                     </button>
                   )}
                 </div>
+
+                {/* Tag Filter Mode Toggle */}
+                {selectedTags.length > 1 && (
+                  <div className="mb-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs text-gray-600 dark:text-gray-400">
+                        Show bookmarks with:
+                      </span>
+                      <div
+                        className="flex rounded-lg p-1"
+                        style={{ backgroundColor: "var(--bg-primary)" }}
+                      >
+                        <button
+                          onClick={() => onTagFilterModeChange("AND")}
+                          className={clsx(
+                            "px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200",
+                            tagFilterMode === "AND"
+                              ? "shadow-sm"
+                              : "hover:opacity-80"
+                          )}
+                          style={
+                            tagFilterMode === "AND"
+                              ? {
+                                  backgroundColor: "var(--bg-secondary)",
+                                  color: "var(--text-primary)",
+                                }
+                              : { color: "var(--text-secondary)" }
+                          }
+                        >
+                          ALL tags
+                        </button>
+                        <button
+                          onClick={() => onTagFilterModeChange("OR")}
+                          className={clsx(
+                            "px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200",
+                            tagFilterMode === "OR"
+                              ? "shadow-sm"
+                              : "hover:opacity-80"
+                          )}
+                          style={
+                            tagFilterMode === "OR"
+                              ? {
+                                  backgroundColor: "var(--bg-secondary)",
+                                  color: "var(--text-primary)",
+                                }
+                              : { color: "var(--text-secondary)" }
+                          }
+                        >
+                          ANY tag
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {availableTags.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -126,12 +187,16 @@ export const BookmarkFilters: React.FC<BookmarkFiltersProps> = ({
                             "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-all duration-200 border",
                             isSelected
                               ? "text-white shadow-md border-transparent"
-                              : "bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 shadow-sm text-gray-700 dark:text-gray-200"
+                              : "shadow-sm hover:opacity-80"
                           )}
                           style={
                             isSelected
                               ? { backgroundColor: tag.color, color: "white" }
-                              : {}
+                              : {
+                                  backgroundColor: "var(--bg-secondary)",
+                                  borderColor: "var(--border-color)",
+                                  color: "var(--text-primary)",
+                                }
                           }
                         >
                           {tag.name}

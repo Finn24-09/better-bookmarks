@@ -35,6 +35,10 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const [filteredTags, setFilteredTags] = useState<BookmarkTag[]>([]);
   const [tagInputFocused, setTagInputFocused] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<"below" | "above">(
+    "below"
+  );
+  const [maxVisibleTags, setMaxVisibleTags] = useState(8);
 
   useEffect(() => {
     if (bookmark) {
@@ -80,20 +84,64 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
             tag.name.toLowerCase().includes(tagInput.toLowerCase()) &&
             !formData.tags.includes(tag.name)
         )
-        .slice(0, 5); // Show max 5 suggestions
+        .sort((a, b) => {
+          // Sort by usage count (most used first), then by name
+          const usageA = a.usageCount || 0;
+          const usageB = b.usageCount || 0;
+          if (usageA !== usageB) {
+            return usageB - usageA;
+          }
+          return a.name.localeCompare(b.name);
+        })
+        .slice(0, maxVisibleTags);
       setFilteredTags(filtered);
     } else {
-      // Show recent tags when input is empty
+      // Show recent tags when input is empty, sorted by usage
       const recentTags = availableTags
         .filter((tag) => !formData.tags.includes(tag.name))
-        .slice(0, 5);
+        .sort((a, b) => {
+          const usageA = a.usageCount || 0;
+          const usageB = b.usageCount || 0;
+          if (usageA !== usageB) {
+            return usageB - usageA;
+          }
+          return a.name.localeCompare(b.name);
+        })
+        .slice(0, maxVisibleTags);
       setFilteredTags(recentTags);
     }
-  }, [tagInput, availableTags, formData.tags]);
+  }, [tagInput, availableTags, formData.tags, maxVisibleTags]);
 
   useEffect(() => {
     setShowTagSuggestions(tagInputFocused && filteredTags.length > 0);
   }, [tagInputFocused, filteredTags]);
+
+  // Calculate dropdown position and max visible tags based on available space
+  const calculateDropdownPosition = (inputElement: HTMLElement) => {
+    const rect = inputElement.getBoundingClientRect();
+    const modalElement = inputElement.closest(".card");
+
+    if (!modalElement) return;
+
+    const modalRect = modalElement.getBoundingClientRect();
+    const tagItemHeight = 40; // Approximate height of each tag item (py-2 + content)
+    const dropdownPadding = 8; // Padding and border
+
+    // Calculate available space below and above within modal boundaries
+    const spaceBelow = modalRect.bottom - rect.bottom - dropdownPadding;
+    const spaceAbove = rect.top - modalRect.top - dropdownPadding;
+
+    // Determine position and calculate max tags that can fit
+    if (spaceBelow >= spaceAbove) {
+      setDropdownPosition("below");
+      const maxTagsBelow = Math.floor(spaceBelow / tagItemHeight);
+      setMaxVisibleTags(Math.max(1, Math.min(maxTagsBelow, 8)));
+    } else {
+      setDropdownPosition("above");
+      const maxTagsAbove = Math.floor(spaceAbove / tagItemHeight);
+      setMaxVisibleTags(Math.max(1, Math.min(maxTagsAbove, 8)));
+    }
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -169,7 +217,7 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
         />
 
         {/* Modal */}
-        <div className="relative inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform card shadow-xl rounded-2xl z-10">
+        <div className="relative inline-block w-full max-w-md p-6 my-8 text-left align-middle transition-all transform card shadow-xl rounded-2xl z-10">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h3
@@ -266,7 +314,7 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
             </div>
 
             {/* Tags */}
-            <div>
+            <div className="relative">
               <label
                 htmlFor="tags"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
@@ -280,7 +328,10 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyPress={handleTagInputKeyPress}
-                    onFocus={() => setTagInputFocused(true)}
+                    onFocus={(e) => {
+                      setTagInputFocused(true);
+                      calculateDropdownPosition(e.target as HTMLElement);
+                    }}
                     onBlur={() =>
                       setTimeout(() => setTagInputFocused(false), 200)
                     }
@@ -298,23 +349,66 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
 
                 {/* Tag Suggestions Dropdown */}
                 {showTagSuggestions && filteredTags.length > 0 && (
-                  <div className="absolute z-20 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-40 overflow-y-auto top-full mt-1">
-                    {filteredTags.map((tag) => (
-                      <button
-                        key={tag.id}
-                        type="button"
-                        onClick={() => addTag(tag.name)}
-                        className="w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2 transition-colors duration-200"
-                        style={{ color: "var(--text-primary)" }}
-                      >
-                        <span
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: tag.color }}
-                        />
-                        <span className="text-sm">{tag.name}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    {/* Backdrop to close dropdown */}
+                    <div
+                      className="fixed inset-0 z-20"
+                      onClick={() => setShowTagSuggestions(false)}
+                    />
+
+                    {/* Dropdown positioned to avoid overflow */}
+                    <div
+                      className={clsx(
+                        "absolute z-30 w-full rounded-lg shadow-2xl max-h-48 overflow-hidden",
+                        dropdownPosition === "below"
+                          ? "top-full mt-1"
+                          : "bottom-full mb-1"
+                      )}
+                      style={{
+                        backgroundColor: "var(--bg-secondary)",
+                        borderColor: "var(--border-color)",
+                        border: "1px solid",
+                      }}
+                    >
+                      <div className="overflow-y-auto max-h-48">
+                        {filteredTags.map((tag, index) => (
+                          <button
+                            key={tag.id}
+                            type="button"
+                            onClick={() => addTag(tag.name)}
+                            className="w-full px-3 py-2 text-left flex items-center justify-between transition-colors duration-200 first:rounded-t-lg last:rounded-b-lg hover:opacity-80"
+                            style={{
+                              color: "var(--text-primary)",
+                              backgroundColor: "transparent",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor =
+                                "var(--bg-primary)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor =
+                                "transparent";
+                            }}
+                          >
+                            <div className="flex items-center space-x-2 min-w-0 flex-1">
+                              <span
+                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: tag.color }}
+                              />
+                              <span className="text-sm font-medium truncate">
+                                {tag.name}
+                              </span>
+                            </div>
+                            {tag.usageCount && tag.usageCount > 0 && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full ml-2 flex-shrink-0">
+                                {tag.usageCount}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
               {formData.tags.length > 0 && (

@@ -271,12 +271,21 @@ class BookmarkService {
         if (!matchesSearch) return false;
       }
 
-      // Tag filter
+      // Tag filter with AND/OR logic
       if (filters.tags.length > 0) {
-        const hasMatchingTag = filters.tags.some(filterTag =>
-          bookmark.tags.some(bookmarkTag => bookmarkTag.name === filterTag)
-        );
-        if (!hasMatchingTag) return false;
+        if (filters.tagFilterMode === "AND") {
+          // ALL tags must be present (AND logic)
+          const hasAllTags = filters.tags.every(filterTag =>
+            bookmark.tags.some(bookmarkTag => bookmarkTag.name === filterTag)
+          );
+          if (!hasAllTags) return false;
+        } else {
+          // ANY tag must be present (OR logic) - default behavior
+          const hasAnyTag = filters.tags.some(filterTag =>
+            bookmark.tags.some(bookmarkTag => bookmarkTag.name === filterTag)
+          );
+          if (!hasAnyTag) return false;
+        }
       }
 
       return true;

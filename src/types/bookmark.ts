@@ -2,6 +2,7 @@ export interface BookmarkTag {
   id: string;
   name: string;
   color: string;
+  usageCount?: number;
 }
 
 export interface Bookmark {
@@ -28,6 +29,7 @@ export type SortOption = 'newest' | 'oldest' | 'title-asc' | 'title-desc';
 export interface BookmarkFilters {
   search: string;
   tags: string[];
+  tagFilterMode: 'AND' | 'OR';
   sortBy: SortOption;
 }
 

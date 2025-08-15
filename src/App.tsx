@@ -26,6 +26,7 @@ const BookmarkApp: React.FC = () => {
   // State management
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagFilterMode, setTagFilterMode] = useState<"AND" | "OR">("OR");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -49,9 +50,10 @@ const BookmarkApp: React.FC = () => {
     () => ({
       search: searchQuery,
       tags: selectedTags,
+      tagFilterMode,
       sortBy,
     }),
-    [searchQuery, selectedTags, sortBy]
+    [searchQuery, selectedTags, tagFilterMode, sortBy]
   );
 
   // Load bookmarks with current filters and pagination
@@ -61,7 +63,7 @@ const BookmarkApp: React.FC = () => {
   // Reset to first page when filters change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedTags, sortBy]);
+  }, [searchQuery, selectedTags, tagFilterMode, sortBy]);
 
   // Modal handlers
   const handleAddBookmark = useCallback(() => {
@@ -144,6 +146,10 @@ const BookmarkApp: React.FC = () => {
     setSelectedTags(tags);
   }, []);
 
+  const handleTagFilterModeChange = useCallback((mode: "AND" | "OR") => {
+    setTagFilterMode(mode);
+  }, []);
+
   const handleSortChange = useCallback((sort: SortOption) => {
     setSortBy(sort);
   }, []);
@@ -217,8 +223,10 @@ const BookmarkApp: React.FC = () => {
       {/* Filters */}
       <BookmarkFilters
         selectedTags={selectedTags}
+        tagFilterMode={tagFilterMode}
         sortBy={sortBy}
         onTagsChange={handleTagsChange}
+        onTagFilterModeChange={handleTagFilterModeChange}
         onSortChange={handleSortChange}
         refreshTrigger={refreshTrigger}
       />
