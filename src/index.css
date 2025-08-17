@@ -1,29 +1,13 @@
 @import "tailwindcss";
 
-@theme {
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
 
-  --animate-fade-in: fadeIn 0.3s ease-in-out;
-  --animate-slide-up: slideUp 0.3s ease-out;
-
-  @keyframes fadeIn {
-    0% { opacity: 0; }
-    100% { opacity: 1; }
-  }
-
-  @keyframes slideUp {
-    0% { transform: translateY(10px); opacity: 0; }
-    100% { transform: translateY(0); opacity: 1; }
-  }
+@keyframes slideUp {
+  0% { transform: translateY(10px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
 }
 
 @layer base {
@@ -65,47 +49,114 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    background-color: #2563eb;
+    color: white;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.2s;
+    outline: none;
+    border: none;
+    cursor: pointer;
+  }
+  
+  .btn-primary:hover {
+    background-color: #1d4ed8;
+  }
+  
+  .btn-primary:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+  
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
   
   .btn-secondary {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
-    @apply font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80;
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: opacity 0.2s;
+    outline: none;
+    cursor: pointer;
+  }
+  
+  .btn-secondary:hover {
+    opacity: 0.8;
+  }
+  
+  .btn-secondary:focus {
+    outline: 2px solid #6b7280;
+    outline-offset: 2px;
+  }
+  
+  .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
   
   .input-field {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
-    @apply w-full px-3 py-2 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors duration-200;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+  }
+  
+  .input-field::placeholder {
+    color: #9ca3af;
+  }
+  
+  .input-field:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px #3b82f6;
   }
   
   .card {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    @apply rounded-lg shadow-md transition-colors duration-200;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: background-color 0.2s, border-color 0.2s;
   }
   
   .toast {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    @apply fixed bottom-4 right-4 z-50 max-w-sm w-full rounded-lg shadow-lg p-4 animate-slide-up;
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    z-index: 50;
+    max-width: 24rem;
+    width: 100%;
+    border-radius: 0.5rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    padding: 1rem;
+    animation: slideUp 0.3s ease-out;
   }
   
   .toast-success {
-    @apply border-l-4 border-l-green-500;
+    border-left: 4px solid #10b981;
   }
   
   .toast-error {
-    @apply border-l-4 border-l-red-500;
+    border-left: 4px solid #ef4444;
   }
 
   /* Header styles */
   .header-bg {
     background-color: rgba(255, 255, 255, 0.8);
     border-bottom: 1px solid var(--border-color);
+    backdrop-filter: blur(12px);
   }
 
   .dark .header-bg {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Plus, Trash2, ChevronDown } from "lucide-react";
+import { X, Plus, Trash2 } from "lucide-react";
 import type {
   Bookmark,
   BookmarkFormData,
@@ -66,8 +66,8 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
       try {
         const tags = await bookmarkService.getAllTags();
         setAvailableTags(tags);
-      } catch (error) {
-        console.error("Error loading tags:", error);
+      } catch (err) {
+        console.error("Error loading tags:", err);
       }
     };
 
@@ -174,7 +174,7 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
     try {
       await onSubmit(formData);
       onClose();
-    } catch (error) {
+    } catch {
       // Error handling is done in the parent component
     }
   };
@@ -371,7 +371,7 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
                       }}
                     >
                       <div className="overflow-y-auto max-h-48">
-                        {filteredTags.map((tag, index) => (
+                        {filteredTags.map((tag) => (
                           <button
                             key={tag.id}
                             type="button"

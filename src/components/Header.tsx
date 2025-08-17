@@ -1,6 +1,6 @@
 import React from "react";
 import { Search, Moon, Sun, Plus } from "lucide-react";
-import { useTheme } from "../contexts/ThemeContext";
+import { useTheme } from "../hooks/useTheme";
 import clsx from "clsx";
 
 interface HeaderProps {
@@ -24,7 +24,13 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Top row: Logo, Title, and Actions */}
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center space-x-2 min-w-0 flex-1">
-              <div className="w-7 h-7 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{
+                  background:
+                    "linear-gradient(to bottom right, #3b82f6, #2563eb)",
+                }}
+              >
                 <span className="text-white font-bold text-xs">B</span>
               </div>
               <h1
@@ -86,7 +92,13 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="hidden sm:flex items-center justify-between h-16">
           {/* Logo and Title */}
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{
+                background:
+                  "linear-gradient(to bottom right, #3b82f6, #2563eb)",
+              }}
+            >
               <span className="text-white font-bold text-sm">B</span>
             </div>
             <h1

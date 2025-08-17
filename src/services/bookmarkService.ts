@@ -18,7 +18,7 @@ class BookmarkService {
       if (!stored) return [];
       
       const bookmarks = JSON.parse(stored);
-      return bookmarks.map((bookmark: any) => ({
+      return bookmarks.map((bookmark: Bookmark) => ({
         ...bookmark,
         createdAt: new Date(bookmark.createdAt),
         updatedAt: new Date(bookmark.updatedAt),

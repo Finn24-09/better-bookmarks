@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { ToastProvider, useToast } from "./contexts/ToastContext";
+import { ToastProvider } from "./contexts/ToastContext";
+import { useToast } from "./hooks/useToast";
 import { Header } from "./components/Header";
 import { BookmarkFilters } from "./components/BookmarkFilters";
 import { BookmarkCard } from "./components/BookmarkCard";
