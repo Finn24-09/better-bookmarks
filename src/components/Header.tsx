@@ -1,6 +1,8 @@
-import React from "react";
-import { Search, Moon, Sun, Plus } from "lucide-react";
+import React, { useState } from "react";
+import { Search, Moon, Sun, Plus, LogOut, User } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
+import { useAuth } from "../hooks/useAuth";
+import { useToast } from "../hooks/useToast";
 import clsx from "clsx";
 
 interface HeaderProps {
@@ -15,6 +17,20 @@ export const Header: React.FC<HeaderProps> = ({
   onAddBookmark,
 }) => {
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
+  const { showToast } = useToast();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      showToast("success", "Successfully logged out!");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Logout failed";
+      showToast("error", message);
+    }
+    setShowUserMenu(false);
+  };
 
   return (
     <header className="sticky top-0 z-40 header-bg backdrop-blur-md">
@@ -68,6 +84,41 @@ export const Header: React.FC<HeaderProps> = ({
                   <Sun className="h-4 w-4" />
                 )}
               </button>
+
+              {/* User Menu */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className={clsx(
+                    "p-2 rounded-lg transition-colors duration-200",
+                    "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
+                    "hover:bg-gray-100 dark:hover:bg-gray-800",
+                    "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                  )}
+                  aria-label="User menu"
+                >
+                  <User className="h-4 w-4" />
+                </button>
+
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                    <div className="py-1">
+                      <div className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                        <p className="font-medium truncate">
+                          {user?.email || "User"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        <LogOut className="h-4 w-4 mr-2" />
+                        Sign out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -153,6 +204,41 @@ export const Header: React.FC<HeaderProps> = ({
                 <Sun className="h-5 w-5" />
               )}
             </button>
+
+            {/* User Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className={clsx(
+                  "p-2 rounded-lg transition-colors duration-200",
+                  "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
+                  "hover:bg-gray-100 dark:hover:bg-gray-800",
+                  "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                )}
+                aria-label="User menu"
+              >
+                <User className="h-5 w-5" />
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                  <div className="py-1">
+                    <div className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-600">
+                      <p className="font-medium truncate">
+                        {user?.email || "User"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <LogOut className="h-5 w-5 mr-2" />
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
