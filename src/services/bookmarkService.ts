@@ -1,4 +1,5 @@
 import type { Bookmark, BookmarkFormData, BookmarkTag, BookmarkFilters, SortOption } from "../types/bookmark";
+import { thumbnailService } from "./thumbnailService";
 
 const STORAGE_KEY = "better-bookmarks";
 const TAGS_STORAGE_KEY = "better-bookmarks-tags";
@@ -69,70 +70,58 @@ class BookmarkService {
       const urlObj = new URL(url);
       const domain = urlObj.hostname;
       
-      // Extract video thumbnail for supported platforms
-      let thumbnail: string | undefined;
+      // Use the thumbnail service to generate thumbnails with fallback strategy
+      const thumbnailResult = await thumbnailService.generateThumbnail(url, {
+        width: 400,
+        height: 300,
+        format: 'jpeg',
+        quality: 85,
+        timeout: 15000
+      });
+
+      // Generate title based on the type of content
       let title = `Page from ${domain}`;
-      
-      // YouTube video detection
-      if (domain.includes('youtube.com') || domain.includes('youtu.be')) {
-        const videoId = this.extractYouTubeVideoId(url);
-        if (videoId) {
-          thumbnail = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-          title = 'YouTube Video';
-        }
-      }
-      // Vimeo video detection
-      else if (domain.includes('vimeo.com')) {
-        const videoId = this.extractVimeoVideoId(url);
-        if (videoId) {
-          // For Vimeo, we'd need to make an API call to get the thumbnail
-          // For now, we'll use a placeholder approach
-          thumbnail = `https://vumbnail.com/${videoId}.jpg`;
-          title = 'Vimeo Video';
-        }
-      }
-      // Dailymotion video detection
-      else if (domain.includes('dailymotion.com')) {
-        const videoId = this.extractDailymotionVideoId(url);
-        if (videoId) {
-          thumbnail = `https://www.dailymotion.com/thumbnail/video/${videoId}`;
-          title = 'Dailymotion Video';
+      if (thumbnailResult.type === 'video') {
+        switch (thumbnailResult.source) {
+          case 'youtube':
+            title = 'YouTube Video';
+            break;
+          case 'vimeo':
+            title = 'Vimeo Video';
+            break;
+          case 'dailymotion':
+            title = 'Dailymotion Video';
+            break;
+          case 'twitch':
+            title = 'Twitch Stream';
+            break;
+          default:
+            title = 'Video Content';
         }
       }
       
       return {
         title,
         favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
-        thumbnail
+        thumbnail: thumbnailResult.thumbnail
       };
     } catch (error) {
       console.error("Error fetching metadata:", error);
-      return {};
+      
+      // Fallback to basic favicon if thumbnail service fails
+      try {
+        const urlObj = new URL(url);
+        const domain = urlObj.hostname;
+        return {
+          title: `Page from ${domain}`,
+          favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
+        };
+      } catch (fallbackError) {
+        return {};
+      }
     }
   }
 
-  private extractYouTubeVideoId(url: string): string | null {
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-      /youtube\.com\/v\/([^&\n?#]+)/
-    ];
-    
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match) return match[1];
-    }
-    return null;
-  }
-
-  private extractVimeoVideoId(url: string): string | null {
-    const match = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-    return match ? match[1] : null;
-  }
-
-  private extractDailymotionVideoId(url: string): string | null {
-    const match = url.match(/dailymotion\.com\/video\/([^_]+)/);
-    return match ? match[1] : null;
-  }
 
   private createOrGetTags(tagNames: string[]): BookmarkTag[] {
     const existingTags = this.getStoredTags();
