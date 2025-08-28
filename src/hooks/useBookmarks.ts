@@ -33,15 +33,16 @@ export const useBookmarks = (
       const result = await bookmarkService.getBookmarks(filters, currentPage, itemsPerPage);
       
       setBookmarks(result.bookmarks);
-      setPagination({
-        currentPage,
-        totalPages: Math.ceil(result.totalCount / itemsPerPage),
-        totalItems: result.totalCount,
-        itemsPerPage,
-      });
+      setPagination(result.pagination);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load bookmarks");
       setBookmarks([]);
+      setPagination({
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: 0,
+        itemsPerPage,
+      });
     } finally {
       setLoading(false);
     }

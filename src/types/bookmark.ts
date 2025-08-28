@@ -7,12 +7,13 @@ export interface BookmarkTag {
 
 export interface Bookmark {
   id: string;
+  userId: string; // Owner of the bookmark
   title: string;
   url: string;
-  description?: string;
-  tags: BookmarkTag[];
-  thumbnail?: string;
+  description: string;
+  tags: string[];
   favicon?: string;
+  thumbnail?: string;
   createdAt: Date;
   updatedAt: Date;
 }

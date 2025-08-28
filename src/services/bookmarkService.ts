@@ -1,321 +1,413 @@
-import type { Bookmark, BookmarkFormData, BookmarkTag, BookmarkFilters, SortOption } from "../types/bookmark";
-import { thumbnailService } from "./thumbnailService";
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  getDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  startAfter,
+  Timestamp,
+  QueryDocumentSnapshot,
+} from 'firebase/firestore';
+import type { DocumentData } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { auth } from '../config/firebase';
+import { thumbnailService } from './thumbnailService';
+import type {
+  Bookmark,
+  BookmarkFormData,
+  BookmarkFilters,
+  PaginationInfo,
+  SortOption,
+} from '../types/bookmark';
 
-const STORAGE_KEY = "better-bookmarks";
-const TAGS_STORAGE_KEY = "better-bookmarks-tags";
+// Helper function to get current user ID
+const getCurrentUserId = (): string => {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('User must be authenticated to perform this action');
+  }
+  return user.uid;
+};
 
-// Predefined tag colors
-const TAG_COLORS = [
-  "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16",
-  "#22c55e", "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9",
-  "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7", "#d946ef",
-  "#ec4899", "#f43f5e"
-];
+// Helper function to convert Firestore document to Bookmark
+const convertFirestoreToBookmark = (doc: QueryDocumentSnapshot<DocumentData>): Bookmark => {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    userId: data.userId,
+    title: data.title,
+    url: data.url,
+    description: data.description || '',
+    tags: data.tags || [],
+    favicon: data.favicon,
+    thumbnail: data.thumbnail,
+    createdAt: data.createdAt?.toDate() || new Date(),
+    updatedAt: data.updatedAt?.toDate() || new Date(),
+  };
+};
+
+// Helper function to convert Bookmark to Firestore data
+const convertBookmarkToFirestore = (bookmark: Partial<Bookmark>) => {
+  const data: any = { ...bookmark };
+  if (data.createdAt instanceof Date) {
+    data.createdAt = Timestamp.fromDate(data.createdAt);
+  }
+  if (data.updatedAt instanceof Date) {
+    data.updatedAt = Timestamp.fromDate(data.updatedAt);
+  }
+  return data;
+};
+
+// Helper function to build Firestore query based on filters
+const buildQuery = (
+  filters: BookmarkFilters,
+  pageSize: number,
+  lastDoc?: QueryDocumentSnapshot<DocumentData>
+) => {
+  const userId = getCurrentUserId();
+  const bookmarksRef = collection(db, 'bookmarks');
+  
+  // Start with basic user filter
+  let q = query(bookmarksRef, where('userId', '==', userId));
+
+  // For now, only apply sorting without complex filters to avoid index issues
+  // We'll handle filtering client-side until indexes are ready
+  try {
+    // Apply sorting - start with simple queries
+    switch (filters.sortBy) {
+      case 'newest':
+        q = query(q, orderBy('createdAt', 'desc'));
+        break;
+      case 'oldest':
+        q = query(q, orderBy('createdAt', 'asc'));
+        break;
+      case 'title-asc':
+        q = query(q, orderBy('title', 'asc'));
+        break;
+      case 'title-desc':
+        q = query(q, orderBy('title', 'desc'));
+        break;
+      default:
+        q = query(q, orderBy('createdAt', 'desc'));
+    }
+
+    // Apply pagination
+    if (lastDoc) {
+      q = query(q, startAfter(lastDoc));
+    }
+    q = query(q, limit(pageSize * 3)); // Get more docs for client-side filtering
+
+  } catch (error) {
+    // If sorting fails due to missing index, fall back to basic query
+    console.warn('Falling back to basic query due to missing index:', error);
+    q = query(bookmarksRef, where('userId', '==', userId), limit(pageSize * 3));
+  }
+
+  return q;
+};
+
+// Helper function to filter bookmarks by search query (client-side)
+const filterBySearch = (bookmarks: Bookmark[], searchQuery: string): Bookmark[] => {
+  if (!searchQuery.trim()) {
+    return bookmarks;
+  }
+
+  const query = searchQuery.toLowerCase();
+  return bookmarks.filter(
+    (bookmark) =>
+      bookmark.title.toLowerCase().includes(query) ||
+      bookmark.description.toLowerCase().includes(query) ||
+      bookmark.url.toLowerCase().includes(query) ||
+      bookmark.tags.some((tag) => tag.toLowerCase().includes(query))
+  );
+};
+
+// Helper function to generate thumbnail and favicon for a URL
+const generateThumbnailData = async (url: string): Promise<{ thumbnail?: string; favicon?: string }> => {
+  try {
+    // Generate thumbnail using the thumbnail service
+    const thumbnailResult = await thumbnailService.generateThumbnail(url);
+    
+    // Always generate a favicon URL as fallback
+    const faviconUrl = `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`;
+    
+    return {
+      thumbnail: thumbnailResult.thumbnail,
+      favicon: faviconUrl,
+    };
+  } catch (error) {
+    console.warn('Error generating thumbnail:', error);
+    
+    // Fallback to just favicon if thumbnail generation fails
+    try {
+      const faviconUrl = `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`;
+      return {
+        favicon: faviconUrl,
+      };
+    } catch (faviconError) {
+      console.warn('Error generating favicon:', faviconError);
+      return {};
+    }
+  }
+};
 
 class BookmarkService {
-  private getStoredBookmarks(): Bookmark[] {
+  async createBookmark(formData: BookmarkFormData): Promise<Bookmark> {
+    const userId = getCurrentUserId();
+    const now = new Date();
+
+    // Generate thumbnail and favicon
+    const thumbnailData = await generateThumbnailData(formData.url);
+
+    const bookmarkData = {
+      userId,
+      title: formData.title,
+      url: formData.url,
+      description: formData.description || '',
+      tags: formData.tags,
+      favicon: thumbnailData.favicon,
+      thumbnail: thumbnailData.thumbnail,
+      createdAt: now,
+      updatedAt: now,
+    };
+
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return [];
-      
-      const bookmarks = JSON.parse(stored);
-      return bookmarks.map((bookmark: Bookmark) => ({
-        ...bookmark,
-        createdAt: new Date(bookmark.createdAt),
-        updatedAt: new Date(bookmark.updatedAt),
-      }));
-    } catch (error) {
-      console.error("Error loading bookmarks:", error);
-      return [];
-    }
-  }
-
-  private saveBookmarks(bookmarks: Bookmark[]): void {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarks));
-    } catch (error) {
-      console.error("Error saving bookmarks:", error);
-      throw new Error("Failed to save bookmarks");
-    }
-  }
-
-  private getStoredTags(): BookmarkTag[] {
-    try {
-      const stored = localStorage.getItem(TAGS_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error("Error loading tags:", error);
-      return [];
-    }
-  }
-
-  private saveTags(tags: BookmarkTag[]): void {
-    try {
-      localStorage.setItem(TAGS_STORAGE_KEY, JSON.stringify(tags));
-    } catch (error) {
-      console.error("Error saving tags:", error);
-    }
-  }
-
-  private generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-  }
-
-  private getRandomTagColor(): string {
-    return TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
-  }
-
-  private async fetchMetadata(url: string): Promise<{ title?: string; favicon?: string; thumbnail?: string }> {
-    try {
-      const urlObj = new URL(url);
-      const domain = urlObj.hostname;
-      
-      // Use the thumbnail service to generate thumbnails with fallback strategy
-      const thumbnailResult = await thumbnailService.generateThumbnail(url, {
-        width: 400,
-        height: 300,
-        format: 'jpeg',
-        quality: 85,
-        timeout: 15000
-      });
-
-      // Generate title based on the type of content
-      let title = `Page from ${domain}`;
-      if (thumbnailResult.type === 'video') {
-        switch (thumbnailResult.source) {
-          case 'youtube':
-            title = 'YouTube Video';
-            break;
-          case 'vimeo':
-            title = 'Vimeo Video';
-            break;
-          case 'dailymotion':
-            title = 'Dailymotion Video';
-            break;
-          case 'twitch':
-            title = 'Twitch Stream';
-            break;
-          default:
-            title = 'Video Content';
-        }
-      }
+      const docRef = await addDoc(collection(db, 'bookmarks'), convertBookmarkToFirestore(bookmarkData));
       
       return {
-        title,
-        favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
-        thumbnail: thumbnailResult.thumbnail
+        id: docRef.id,
+        ...bookmarkData,
       };
     } catch (error) {
-      console.error("Error fetching metadata:", error);
-      
-      // Fallback to basic favicon if thumbnail service fails
-      try {
-        const urlObj = new URL(url);
-        const domain = urlObj.hostname;
-        return {
-          title: `Page from ${domain}`,
-          favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=64`
-        };
-      } catch (fallbackError) {
-        return {};
-      }
-    }
-  }
-
-
-  private createOrGetTags(tagNames: string[]): BookmarkTag[] {
-    const existingTags = this.getStoredTags();
-    const tags: BookmarkTag[] = [];
-
-    tagNames.forEach(tagName => {
-      const trimmedName = tagName.trim().toLowerCase();
-      if (!trimmedName) return;
-
-      let existingTag = existingTags.find(tag => tag.name.toLowerCase() === trimmedName);
-      
-      if (!existingTag) {
-        existingTag = {
-          id: this.generateId(),
-          name: trimmedName,
-          color: this.getRandomTagColor()
-        };
-        existingTags.push(existingTag);
-      }
-      
-      tags.push(existingTag);
-    });
-
-    this.saveTags(existingTags);
-    return tags;
-  }
-
-  async createBookmark(formData: BookmarkFormData): Promise<Bookmark> {
-    try {
-      const bookmarks = this.getStoredBookmarks();
-      
-      // Check if URL already exists
-      const existingBookmark = bookmarks.find(b => b.url === formData.url);
-      if (existingBookmark) {
-        throw new Error("Bookmark with this URL already exists");
-      }
-
-      const metadata = await this.fetchMetadata(formData.url);
-      const tags = this.createOrGetTags(formData.tags);
-
-      const newBookmark: Bookmark = {
-        id: this.generateId(),
-        title: formData.title || metadata.title || "Untitled",
-        url: formData.url,
-        description: formData.description,
-        tags,
-        favicon: metadata.favicon,
-        thumbnail: metadata.thumbnail,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      bookmarks.unshift(newBookmark); // Add to beginning
-      this.saveBookmarks(bookmarks);
-      
-      return newBookmark;
-    } catch (error) {
-      console.error("Error creating bookmark:", error);
-      throw error;
+      console.error('Error creating bookmark:', error);
+      throw new Error('Failed to create bookmark');
     }
   }
 
   async updateBookmark(id: string, formData: BookmarkFormData): Promise<Bookmark> {
+    const userId = getCurrentUserId();
+    const bookmarkRef = doc(db, 'bookmarks', id);
+
     try {
-      const bookmarks = this.getStoredBookmarks();
-      const bookmarkIndex = bookmarks.findIndex(b => b.id === id);
-      
-      if (bookmarkIndex === -1) {
-        throw new Error("Bookmark not found");
+      // First, verify the bookmark belongs to the current user
+      const bookmarkDoc = await getDoc(bookmarkRef);
+      if (!bookmarkDoc.exists()) {
+        throw new Error('Bookmark not found');
       }
 
-      const tags = this.createOrGetTags(formData.tags);
-      const updatedBookmark: Bookmark = {
-        ...bookmarks[bookmarkIndex],
+      const bookmarkData = bookmarkDoc.data();
+      if (bookmarkData.userId !== userId) {
+        throw new Error('Unauthorized: You can only update your own bookmarks');
+      }
+
+      // Check if URL changed to regenerate thumbnails
+      const urlChanged = bookmarkData.url !== formData.url;
+      let thumbnailData: { favicon?: string; thumbnail?: string };
+
+      if (urlChanged) {
+        // Regenerate thumbnails if URL changed
+        thumbnailData = await generateThumbnailData(formData.url);
+      } else {
+        // Keep existing thumbnails
+        thumbnailData = {
+          favicon: bookmarkData.favicon,
+          thumbnail: bookmarkData.thumbnail,
+        };
+      }
+
+      const updateData = {
         title: formData.title,
         url: formData.url,
-        description: formData.description,
-        tags,
+        description: formData.description || '',
+        tags: formData.tags,
+        favicon: thumbnailData.favicon,
+        thumbnail: thumbnailData.thumbnail,
         updatedAt: new Date(),
       };
 
-      bookmarks[bookmarkIndex] = updatedBookmark;
-      this.saveBookmarks(bookmarks);
-      
-      return updatedBookmark;
+      await updateDoc(bookmarkRef, convertBookmarkToFirestore(updateData));
+
+      return {
+        id,
+        userId,
+        ...updateData,
+        createdAt: bookmarkData.createdAt?.toDate() || new Date(),
+      };
     } catch (error) {
-      console.error("Error updating bookmark:", error);
-      throw error;
+      console.error('Error updating bookmark:', error);
+      throw new Error('Failed to update bookmark');
     }
   }
 
   async deleteBookmark(id: string): Promise<void> {
+    const userId = getCurrentUserId();
+    const bookmarkRef = doc(db, 'bookmarks', id);
+
     try {
-      const bookmarks = this.getStoredBookmarks();
-      const filteredBookmarks = bookmarks.filter(b => b.id !== id);
-      
-      if (filteredBookmarks.length === bookmarks.length) {
-        throw new Error("Bookmark not found");
+      // First, verify the bookmark belongs to the current user
+      const bookmarkDoc = await getDoc(bookmarkRef);
+      if (!bookmarkDoc.exists()) {
+        throw new Error('Bookmark not found');
       }
 
-      this.saveBookmarks(filteredBookmarks);
+      const bookmarkData = bookmarkDoc.data();
+      if (bookmarkData.userId !== userId) {
+        throw new Error('Unauthorized: You can only delete your own bookmarks');
+      }
+
+      await deleteDoc(bookmarkRef);
     } catch (error) {
-      console.error("Error deleting bookmark:", error);
-      throw error;
+      console.error('Error deleting bookmark:', error);
+      throw new Error('Failed to delete bookmark');
     }
-  }
-
-  private sortBookmarks(bookmarks: Bookmark[], sortBy: SortOption): Bookmark[] {
-    return [...bookmarks].sort((a, b) => {
-      switch (sortBy) {
-        case "newest":
-          return b.createdAt.getTime() - a.createdAt.getTime();
-        case "oldest":
-          return a.createdAt.getTime() - b.createdAt.getTime();
-        case "title-asc":
-          return a.title.localeCompare(b.title);
-        case "title-desc":
-          return b.title.localeCompare(a.title);
-        default:
-          return 0;
-      }
-    });
-  }
-
-  private filterBookmarks(bookmarks: Bookmark[], filters: BookmarkFilters): Bookmark[] {
-    return bookmarks.filter(bookmark => {
-      // Search filter
-      if (filters.search) {
-        const searchTerm = filters.search.toLowerCase();
-        const matchesSearch = 
-          bookmark.title.toLowerCase().includes(searchTerm) ||
-          bookmark.url.toLowerCase().includes(searchTerm) ||
-          (bookmark.description && bookmark.description.toLowerCase().includes(searchTerm)) ||
-          bookmark.tags.some(tag => tag.name.toLowerCase().includes(searchTerm));
-        
-        if (!matchesSearch) return false;
-      }
-
-      // Tag filter with AND/OR logic
-      if (filters.tags.length > 0) {
-        if (filters.tagFilterMode === "AND") {
-          // ALL tags must be present (AND logic)
-          const hasAllTags = filters.tags.every(filterTag =>
-            bookmark.tags.some(bookmarkTag => bookmarkTag.name === filterTag)
-          );
-          if (!hasAllTags) return false;
-        } else {
-          // ANY tag must be present (OR logic) - default behavior
-          const hasAnyTag = filters.tags.some(filterTag =>
-            bookmark.tags.some(bookmarkTag => bookmarkTag.name === filterTag)
-          );
-          if (!hasAnyTag) return false;
-        }
-      }
-
-      return true;
-    });
   }
 
   async getBookmarks(
     filters: BookmarkFilters,
     page: number = 1,
-    itemsPerPage: number = 12
-  ): Promise<{ bookmarks: Bookmark[]; totalCount: number }> {
+    pageSize: number = 12
+  ): Promise<{ bookmarks: Bookmark[]; pagination: PaginationInfo }> {
+    const userId = getCurrentUserId();
+    
     try {
-      const allBookmarks = this.getStoredBookmarks();
-      const filteredBookmarks = this.filterBookmarks(allBookmarks, filters);
-      const sortedBookmarks = this.sortBookmarks(filteredBookmarks, filters.sortBy);
+      // Use simple query while indexes are building
+      const bookmarksRef = collection(db, 'bookmarks');
+      const q = query(bookmarksRef, where('userId', '==', userId));
       
-      const startIndex = (page - 1) * itemsPerPage;
-      const endIndex = startIndex + itemsPerPage;
-      const paginatedBookmarks = sortedBookmarks.slice(startIndex, endIndex);
+      const querySnapshot = await getDocs(q);
+      let bookmarks = querySnapshot.docs.map(convertFirestoreToBookmark);
+
+      // Apply all filtering and sorting client-side for now
+      
+      // Apply search filtering
+      if (filters.search) {
+        bookmarks = filterBySearch(bookmarks, filters.search);
+      }
+
+      // Apply tag filtering
+      if (filters.tags.length > 0) {
+        if (filters.tagFilterMode === 'AND') {
+          bookmarks = bookmarks.filter((bookmark) =>
+            filters.tags.every((tag) => bookmark.tags.includes(tag))
+          );
+        } else {
+          bookmarks = bookmarks.filter((bookmark) =>
+            filters.tags.some((tag) => bookmark.tags.includes(tag))
+          );
+        }
+      }
+
+      // Apply sorting
+      bookmarks.sort((a, b) => {
+        switch (filters.sortBy) {
+          case 'newest':
+            return b.createdAt.getTime() - a.createdAt.getTime();
+          case 'oldest':
+            return a.createdAt.getTime() - b.createdAt.getTime();
+          case 'title-asc':
+            return a.title.localeCompare(b.title);
+          case 'title-desc':
+            return b.title.localeCompare(a.title);
+          default:
+            return b.createdAt.getTime() - a.createdAt.getTime();
+        }
+      });
+
+      // Calculate pagination
+      const totalItems = bookmarks.length;
+      const totalPages = Math.ceil(totalItems / pageSize);
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const paginatedBookmarks = bookmarks.slice(startIndex, endIndex);
+
+      const pagination: PaginationInfo = {
+        currentPage: page,
+        totalPages,
+        totalItems,
+        itemsPerPage: pageSize,
+      };
 
       return {
         bookmarks: paginatedBookmarks,
-        totalCount: sortedBookmarks.length
+        pagination,
       };
     } catch (error) {
-      console.error("Error getting bookmarks:", error);
-      throw error;
+      console.error('Error fetching bookmarks:', error);
+      throw new Error('Failed to fetch bookmarks');
     }
   }
 
-  async getAllTags(): Promise<BookmarkTag[]> {
-    return this.getStoredTags();
+  async getAllTags(): Promise<string[]> {
+    const userId = getCurrentUserId();
+    
+    try {
+      const q = query(collection(db, 'bookmarks'), where('userId', '==', userId));
+      const querySnapshot = await getDocs(q);
+      
+      const tagSet = new Set<string>();
+      querySnapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        if (data.tags && Array.isArray(data.tags)) {
+          data.tags.forEach((tag: string) => tagSet.add(tag));
+        }
+      });
+
+      return Array.from(tagSet).sort();
+    } catch (error) {
+      console.error('Error fetching tags:', error);
+      throw new Error('Failed to fetch tags');
+    }
   }
 
   async getBookmarkById(id: string): Promise<Bookmark | null> {
+    const userId = getCurrentUserId();
+    
     try {
-      const bookmarks = this.getStoredBookmarks();
-      return bookmarks.find(b => b.id === id) || null;
+      const bookmarkRef = doc(db, 'bookmarks', id);
+      const bookmarkDoc = await getDoc(bookmarkRef);
+      
+      if (!bookmarkDoc.exists()) {
+        return null;
+      }
+
+      const bookmarkData = bookmarkDoc.data();
+      if (bookmarkData.userId !== userId) {
+        throw new Error('Unauthorized: You can only access your own bookmarks');
+      }
+
+      return convertFirestoreToBookmark(bookmarkDoc as QueryDocumentSnapshot<DocumentData>);
     } catch (error) {
-      console.error("Error getting bookmark:", error);
-      return null;
+      console.error('Error fetching bookmark:', error);
+      throw new Error('Failed to fetch bookmark');
+    }
+  }
+
+  // Helper method to check if URL already exists for the current user
+  async urlExists(url: string, excludeId?: string): Promise<boolean> {
+    const userId = getCurrentUserId();
+    
+    try {
+      const q = query(
+        collection(db, 'bookmarks'),
+        where('userId', '==', userId),
+        where('url', '==', url)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      if (excludeId) {
+        return querySnapshot.docs.some(doc => doc.id !== excludeId);
+      }
+      
+      return !querySnapshot.empty;
+    } catch (error) {
+      console.error('Error checking URL existence:', error);
+      return false;
     }
   }
 }

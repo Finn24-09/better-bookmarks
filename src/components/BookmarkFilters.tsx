@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Filter, X } from "lucide-react";
-import type { BookmarkTag, SortOption } from "../types/bookmark";
+import type { SortOption } from "../types/bookmark";
 import { bookmarkService } from "../services/bookmarkService";
 import clsx from "clsx";
 
@@ -23,8 +23,34 @@ export const BookmarkFilters: React.FC<BookmarkFiltersProps> = ({
   onSortChange,
   refreshTrigger,
 }) => {
-  const [availableTags, setAvailableTags] = useState<BookmarkTag[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Generate a consistent color for each tag based on its name (same as BookmarkCard)
+  const getTagColor = (tag: string) => {
+    const colors = [
+      "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+      "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+      "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
+      "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+      "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+      "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+      "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+      "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
+      "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
+    ];
+
+    // Generate a hash from the tag name to get consistent colors
+    let hash = 0;
+    for (let i = 0; i < tag.length; i++) {
+      const char = tag.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+
+    return colors[Math.abs(hash) % colors.length];
+  };
 
   useEffect(() => {
     const loadTags = async () => {
@@ -178,28 +204,19 @@ export const BookmarkFilters: React.FC<BookmarkFiltersProps> = ({
                 {availableTags.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {availableTags.map((tag) => {
-                      const isSelected = selectedTags.includes(tag.name);
+                      const isSelected = selectedTags.includes(tag);
                       return (
                         <button
-                          key={tag.id}
-                          onClick={() => handleTagToggle(tag.name)}
+                          key={tag}
+                          onClick={() => handleTagToggle(tag)}
                           className={clsx(
-                            "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-all duration-200 border",
+                            "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-all duration-200",
                             isSelected
-                              ? "text-white shadow-md border-transparent"
-                              : "shadow-sm hover:opacity-80"
+                              ? getTagColor(tag)
+                              : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                           )}
-                          style={
-                            isSelected
-                              ? { backgroundColor: tag.color, color: "white" }
-                              : {
-                                  backgroundColor: "var(--bg-secondary)",
-                                  borderColor: "var(--border-color)",
-                                  color: "var(--text-primary)",
-                                }
-                          }
                         >
-                          {tag.name}
+                          {tag}
                           {isSelected && <X className="ml-1 h-3 w-3" />}
                         </button>
                       );

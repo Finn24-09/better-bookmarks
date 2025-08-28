@@ -18,6 +18,32 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   const [imageLoading, setImageLoading] = useState(true);
   const [showActions, setShowActions] = useState(false);
 
+  // Generate a consistent color for each tag based on its name
+  const getTagColor = (tag: string) => {
+    const colors = [
+      "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+      "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+      "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
+      "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+      "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+      "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+      "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+      "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
+      "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
+    ];
+
+    // Generate a hash from the tag name to get consistent colors
+    let hash = 0;
+    for (let i = 0; i < tag.length; i++) {
+      const char = tag.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+
+    return colors[Math.abs(hash) % colors.length];
+  };
+
   const handleImageLoad = () => {
     setImageLoading(false);
   };
@@ -192,13 +218,14 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
           <div className="h-6 mb-3">
             {bookmark.tags.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {bookmark.tags.map((tag) => (
+                {bookmark.tags.map((tag, index) => (
                   <span
-                    key={tag.id}
-                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white"
-                    style={{ backgroundColor: tag.color }}
+                    key={`${bookmark.id}-tag-${index}`}
+                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getTagColor(
+                      tag
+                    )}`}
                   >
-                    {tag.name}
+                    {tag}
                   </span>
                 ))}
               </div>
