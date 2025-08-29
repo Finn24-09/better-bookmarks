@@ -17,7 +17,7 @@ import {
 import type { DocumentData } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { auth } from '../config/firebase';
-import { thumbnailService } from './thumbnailService';
+import { enhancedThumbnailService } from './enhancedThumbnailService';
 import type {
   Bookmark,
   BookmarkFormData,
@@ -129,10 +129,11 @@ const filterBySearch = (bookmarks: Bookmark[], searchQuery: string): Bookmark[] 
 };
 
 // Helper function to generate thumbnail and favicon for a URL
-const generateThumbnailData = async (url: string): Promise<{ thumbnail?: string; favicon?: string }> => {
+const generateThumbnailData = async (url: string, isCreatingBookmark: boolean = false): Promise<{ thumbnail?: string; favicon?: string }> => {
   try {
-    // Generate thumbnail using the thumbnail service
-    const thumbnailResult = await thumbnailService.generateThumbnail(url);
+    // Generate thumbnail using the enhanced thumbnail service with Firebase Storage
+    // Skip access check when creating a new bookmark since it doesn't exist yet
+    const thumbnailResult = await enhancedThumbnailService.generateThumbnail(url, {}, isCreatingBookmark);
     
     // Always generate a favicon URL as fallback
     const faviconUrl = `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`;
@@ -142,7 +143,7 @@ const generateThumbnailData = async (url: string): Promise<{ thumbnail?: string;
       favicon: faviconUrl,
     };
   } catch (error) {
-    console.warn('Error generating thumbnail:', error);
+    console.warn('Error generating thumbnail with enhanced service:', error);
     
     // Fallback to just favicon if thumbnail generation fails
     try {
@@ -162,8 +163,8 @@ class BookmarkService {
     const userId = getCurrentUserId();
     const now = new Date();
 
-    // Generate thumbnail and favicon
-    const thumbnailData = await generateThumbnailData(formData.url);
+    // Generate thumbnail and favicon (skip access check since we're creating the bookmark)
+    const thumbnailData = await generateThumbnailData(formData.url, true);
 
     const bookmarkData = {
       userId,
@@ -211,8 +212,8 @@ class BookmarkService {
       let thumbnailData: { favicon?: string; thumbnail?: string };
 
       if (urlChanged) {
-        // Regenerate thumbnails if URL changed
-        thumbnailData = await generateThumbnailData(formData.url);
+        // Regenerate thumbnails if URL changed (don't skip access check since bookmark exists)
+        thumbnailData = await generateThumbnailData(formData.url, false);
       } else {
         // Keep existing thumbnails
         thumbnailData = {
