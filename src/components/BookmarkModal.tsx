@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
-import type {
-  Bookmark,
-  BookmarkFormData,
-  BookmarkTag,
-} from "../types/bookmark";
+import type { Bookmark, BookmarkFormData } from "../types/bookmark";
 import { bookmarkService } from "../services/bookmarkService";
 import clsx from "clsx";
 

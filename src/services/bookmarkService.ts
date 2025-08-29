@@ -8,9 +8,6 @@ import {
   getDoc,
   query,
   where,
-  orderBy,
-  limit,
-  startAfter,
   Timestamp,
   QueryDocumentSnapshot,
 } from 'firebase/firestore';
@@ -23,7 +20,6 @@ import type {
   BookmarkFormData,
   BookmarkFilters,
   PaginationInfo,
-  SortOption,
 } from '../types/bookmark';
 
 // Helper function to get current user ID
@@ -64,53 +60,6 @@ const convertBookmarkToFirestore = (bookmark: Partial<Bookmark>) => {
   return data;
 };
 
-// Helper function to build Firestore query based on filters
-const buildQuery = (
-  filters: BookmarkFilters,
-  pageSize: number,
-  lastDoc?: QueryDocumentSnapshot<DocumentData>
-) => {
-  const userId = getCurrentUserId();
-  const bookmarksRef = collection(db, 'bookmarks');
-  
-  // Start with basic user filter
-  let q = query(bookmarksRef, where('userId', '==', userId));
-
-  // For now, only apply sorting without complex filters to avoid index issues
-  // We'll handle filtering client-side until indexes are ready
-  try {
-    // Apply sorting - start with simple queries
-    switch (filters.sortBy) {
-      case 'newest':
-        q = query(q, orderBy('createdAt', 'desc'));
-        break;
-      case 'oldest':
-        q = query(q, orderBy('createdAt', 'asc'));
-        break;
-      case 'title-asc':
-        q = query(q, orderBy('title', 'asc'));
-        break;
-      case 'title-desc':
-        q = query(q, orderBy('title', 'desc'));
-        break;
-      default:
-        q = query(q, orderBy('createdAt', 'desc'));
-    }
-
-    // Apply pagination
-    if (lastDoc) {
-      q = query(q, startAfter(lastDoc));
-    }
-    q = query(q, limit(pageSize * 3)); // Get more docs for client-side filtering
-
-  } catch (error) {
-    // If sorting fails due to missing index, fall back to basic query
-    console.warn('Falling back to basic query due to missing index:', error);
-    q = query(bookmarksRef, where('userId', '==', userId), limit(pageSize * 3));
-  }
-
-  return q;
-};
 
 // Helper function to filter bookmarks by search query (client-side)
 const filterBySearch = (bookmarks: Bookmark[], searchQuery: string): Bookmark[] => {

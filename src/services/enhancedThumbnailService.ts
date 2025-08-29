@@ -1,12 +1,8 @@
 import { 
   ref, 
   uploadBytes, 
-  getDownloadURL, 
-  getMetadata, 
-  updateMetadata,
-  listAll
+  getDownloadURL
 } from 'firebase/storage';
-import type { StorageReference } from 'firebase/storage';
 import { 
   collection, 
   query, 
@@ -424,8 +420,8 @@ class EnhancedThumbnailService {
         if (!hasBookmarks) {
           // Delete from storage and metadata
           try {
-            const storageRef = ref(storage, data.storagePath);
             // Note: You might want to implement storage deletion based on your needs
+            // const storageRef = ref(storage, data.storagePath);
             // await deleteObject(storageRef);
             
             // Delete metadata
