@@ -227,14 +227,42 @@ class EnhancedThumbnailService {
   private async updateAccessStats(thumbnailId: string): Promise<void> {
     try {
       const docRef = doc(db, this.COLLECTION_NAME, thumbnailId);
+      const docSnapshot = await getDocs(query(collection(db, this.COLLECTION_NAME), where('__name__', '==', thumbnailId)));
+      const currentAccessCount = docSnapshot.docs[0]?.data()?.accessCount || 0;
+      
       await updateDoc(docRef, {
-        accessCount: (await getDocs(query(collection(db, this.COLLECTION_NAME), where('__name__', '==', thumbnailId)))).docs[0]?.data()?.accessCount + 1 || 1,
+        accessCount: currentAccessCount + 1,
         lastAccessedAt: Timestamp.fromDate(new Date()),
         updatedAt: Timestamp.fromDate(new Date())
       });
     } catch (error) {
       console.error('Error updating access stats:', error);
       // Don't throw error for stats update failure
+    }
+  }
+
+  /**
+   * Track thumbnail access by URL - public method for external use
+   */
+  async trackThumbnailAccess(url: string): Promise<void> {
+    try {
+      // Check if user has access to this URL
+      const hasAccess = await this.userHasAccessToUrl(url);
+      if (!hasAccess) {
+        return; // Silently return if user doesn't have access
+      }
+
+      // Generate URL hash to find the thumbnail metadata
+      const urlHash = await this.generateUrlHash(url);
+      
+      // Find existing thumbnail metadata
+      const existingThumbnail = await this.checkThumbnailExists(urlHash);
+      if (existingThumbnail && existingThumbnail.id) {
+        await this.updateAccessStats(existingThumbnail.id);
+      }
+    } catch (error) {
+      console.error('Error tracking thumbnail access:', error);
+      // Don't throw error for tracking failure
     }
   }
 

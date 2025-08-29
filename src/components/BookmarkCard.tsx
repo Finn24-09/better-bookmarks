@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ExternalLink, Edit, Trash2, Globe, MoreVertical } from "lucide-react";
 import type { Bookmark } from "../types/bookmark";
+import { enhancedThumbnailService } from "../services/enhancedThumbnailService";
 import clsx from "clsx";
 
 interface BookmarkCardProps {
@@ -46,12 +47,31 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
   const handleImageLoad = () => {
     setImageLoading(false);
+    // Track thumbnail access when image loads successfully
+    if (bookmark.thumbnail && !imageError) {
+      enhancedThumbnailService
+        .trackThumbnailAccess(bookmark.url)
+        .catch((error) => {
+          console.warn("Failed to track thumbnail access:", error);
+        });
+    }
   };
 
   const handleImageError = () => {
     setImageError(true);
     setImageLoading(false);
   };
+
+  // Track thumbnail access when component mounts (for cached/immediate loads)
+  useEffect(() => {
+    if (bookmark.thumbnail) {
+      enhancedThumbnailService
+        .trackThumbnailAccess(bookmark.url)
+        .catch((error) => {
+          console.warn("Failed to track thumbnail access:", error);
+        });
+    }
+  }, [bookmark.url, bookmark.thumbnail]);
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat("en-US", {
