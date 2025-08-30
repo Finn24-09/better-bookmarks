@@ -10,6 +10,7 @@ import { EmptyState } from "./EmptyState";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useBookmarks } from "../hooks/useBookmarks";
 import { bookmarkService } from "../services/bookmarkService";
+import { Watermark } from "./Watermark";
 import type {
   Bookmark,
   BookmarkFormData,
@@ -256,6 +257,12 @@ export const BookmarkApp: React.FC = () => {
         onCancel={() =>
           setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
         }
+      />
+
+      {/* Watermark */}
+      <Watermark
+        version="0.0.0"
+        githubUrl="https://github.com/Finn24-09/better-bookmarks"
       />
     </div>
   );

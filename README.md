@@ -157,7 +157,156 @@ better-bookmarks/
 - ✅ **Size Limits:** 5MB maximum file size for thumbnails
 - ✅ **Secure by Default:** All other access is denied
 
-## 🚀 Deployment
+## 🐳 Docker Deployment
+
+### Quick Start with Docker
+
+The easiest way to deploy Better Bookmarks is using Docker. The application comes with a production-ready Docker setup that includes security best practices.
+
+#### Prerequisites
+
+- Docker and Docker Compose installed
+- Firebase project configured (see Firebase Setup section)
+
+#### Environment Setup
+
+1. **Create environment file:**
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Configure your environment variables in `.env`:**
+
+   ```env
+   # Screenshot API Configuration
+   VITE_SCREENSHOT_API_URL=http://localhost:8080
+   VITE_SCREENSHOT_API_KEY=your-api-key-here
+
+   # Firebase Configuration
+   VITE_FIREBASE_API_KEY=your-firebase-api-key-here
+   VITE_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
+   VITE_FIREBASE_PROJECT_ID=your-project-id
+   VITE_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
+   VITE_FIREBASE_MESSAGING_SENDER_ID=123456789012
+   VITE_FIREBASE_APP_ID=1:123456789012:web:abcdef123456789012345
+   ```
+
+#### Build and Run
+
+1. **Using Docker Compose (Recommended):**
+
+   ```bash
+   # Build and start the application
+   docker-compose up -d
+
+   # View logs
+   docker-compose logs -f
+
+   # Stop the application
+   docker-compose down
+   ```
+
+   The application will be available at `http://localhost:3000`
+
+2. **Using Docker directly:**
+
+   ```bash
+   # Build the image
+   docker build -t better-bookmarks .
+
+   # Run the container
+   docker run -d \
+     --name better-bookmarks-app \
+     -p 3000:8080 \
+     --env-file .env \
+     better-bookmarks
+   ```
+
+#### Production Deployment
+
+For production environments, create a `docker-compose.prod.yml` file:
+
+```yaml
+version: "3.8"
+services:
+  better-bookmarks:
+    image: better-bookmarks:latest
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+Deploy with:
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+### Docker Security Features
+
+The Docker setup includes several security best practices:
+
+- ✅ **Multi-stage build** - Reduces final image size and attack surface
+- ✅ **Non-root user** - Application runs as unprivileged user
+- ✅ **Read-only filesystem** - Container filesystem is read-only
+- ✅ **Security headers** - Comprehensive HTTP security headers
+- ✅ **Health checks** - Built-in health monitoring
+- ✅ **Signal handling** - Proper signal handling with dumb-init
+- ✅ **Minimal base image** - Alpine Linux for smaller attack surface
+- ✅ **No new privileges** - Prevents privilege escalation
+- ✅ **Resource limits** - CPU and memory constraints
+
+### Environment Variables in Docker
+
+All environment variables can be set through Docker environment variables:
+
+```bash
+# Example with all variables
+docker run -d \
+  --name better-bookmarks \
+  -p 3000:8080 \
+  -e VITE_FIREBASE_API_KEY="your-api-key" \
+  -e VITE_FIREBASE_AUTH_DOMAIN="your-project.firebaseapp.com" \
+  -e VITE_FIREBASE_PROJECT_ID="your-project-id" \
+  -e VITE_FIREBASE_STORAGE_BUCKET="your-project.appspot.com" \
+  -e VITE_FIREBASE_MESSAGING_SENDER_ID="123456789012" \
+  -e VITE_FIREBASE_APP_ID="1:123456789012:web:abcdef" \
+  -e VITE_SCREENSHOT_API_URL="http://localhost:8080" \
+  -e VITE_SCREENSHOT_API_KEY="your-screenshot-api-key" \
+  better-bookmarks
+```
+
+### Health Monitoring
+
+The Docker container includes health checks:
+
+```bash
+# Check container health
+docker ps
+
+# View health check logs
+docker inspect --format='{{json .State.Health}}' better-bookmarks-app
+```
+
+The health endpoint is available at `/health` and returns a simple "healthy" response.
+
+## 🚀 Traditional Deployment
 
 ### Build for Production
 
@@ -197,6 +346,7 @@ The built files in the `dist/` folder can be deployed to any static hosting serv
 - **Vercel:** Connect your GitHub repository
 - **Netlify:** Drag and drop the `dist` folder
 - **GitHub Pages:** Use GitHub Actions for automatic deployment
+- **Docker:** Use the provided Docker setup for containerized deployment
 
 ## 🧪 Development
 

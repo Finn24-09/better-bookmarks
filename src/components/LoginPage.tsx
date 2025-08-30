@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Mail, Lock, LogIn } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
+import { Watermark } from "./Watermark";
 import type { LoginFormData } from "../types/auth";
 
 export const LoginPage: React.FC = () => {
@@ -190,6 +191,12 @@ export const LoginPage: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* Watermark */}
+      <Watermark
+        version="0.0.0"
+        githubUrl="https://github.com/Finn24-09/better-bookmarks"
+      />
     </div>
   );
 };

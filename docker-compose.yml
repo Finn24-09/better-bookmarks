@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  better-bookmarks:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: better-bookmarks-app
+    ports:
+      - "3000:8080"
+    environment:
+      # Screenshot API Configuration
+      - VITE_SCREENSHOT_API_URL=${VITE_SCREENSHOT_API_URL:-http://localhost:8080}
+      - VITE_SCREENSHOT_API_KEY=${VITE_SCREENSHOT_API_KEY:-}
+      
+      # Firebase Configuration
+      - VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY:-}
+      - VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN:-}
+      - VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID:-}
+      - VITE_FIREBASE_STORAGE_BUCKET=${VITE_FIREBASE_STORAGE_BUCKET:-}
+      - VITE_FIREBASE_MESSAGING_SENDER_ID=${VITE_FIREBASE_MESSAGING_SENDER_ID:-}
+      - VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    networks:
+      - better-bookmarks-network
+
+networks:
+  better-bookmarks-network:
+    driver: bridge
+    name: better-bookmarks-network
+
+# Production docker-compose override example
+# Create docker-compose.prod.yml for production-specific settings:
+#
+# version: '3.8'
+# services:
+#   better-bookmarks:
+#     deploy:
+#       replicas: 2
+#       resources:
+#         limits:
+#           cpus: '0.5'
+#           memory: 512M
+#         reservations:
+#           cpus: '0.25'
+#           memory: 256M
+#       restart_policy:
+#         condition: on-failure
+#         delay: 5s
+#         max_attempts: 3
+#     logging:
+#       driver: "json-file"
+#       options:
+#         max-size: "10m"
+#         max-file: "3"
