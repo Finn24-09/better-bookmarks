@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import type { Bookmark, BookmarkFormData } from "../types/bookmark";
 import { bookmarkService } from "../services/bookmarkService";
+import { validateUrl, sanitizeText, validateTag } from "../utils/security";
 import clsx from "clsx";
 
 interface BookmarkModalProps {
@@ -179,18 +180,38 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.title.trim()) {
+    // Validate title
+    const sanitizedTitle = sanitizeText(formData.title, 200);
+    if (!sanitizedTitle) {
       newErrors.title = "Title is required";
+    } else if (sanitizedTitle.length > 200) {
+      newErrors.title = "Title is too long (max 200 characters)";
     }
 
-    if (!formData.url.trim()) {
-      newErrors.url = "URL is required";
-    } else {
-      try {
-        new URL(formData.url);
-      } catch {
-        newErrors.url = "Please enter a valid URL";
+    // Validate URL
+    const urlValidation = validateUrl(formData.url);
+    if (!urlValidation.isValid) {
+      newErrors.url = urlValidation.error || "Invalid URL";
+    }
+
+    // Validate description
+    const sanitizedDescription = sanitizeText(formData.description || "", 1000);
+    if (formData.description && sanitizedDescription.length > 1000) {
+      newErrors.description = "Description is too long (max 1000 characters)";
+    }
+
+    // Validate tags
+    for (const tag of formData.tags) {
+      const tagValidation = validateTag(tag);
+      if (!tagValidation.isValid) {
+        newErrors.tags = `Invalid tag "${tag}": ${tagValidation.error}`;
+        break;
       }
+    }
+
+    // Check tag limit
+    if (formData.tags.length > 20) {
+      newErrors.tags = "Too many tags (max 20)";
     }
 
     setErrors(newErrors);

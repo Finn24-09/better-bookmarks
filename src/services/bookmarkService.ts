@@ -15,6 +15,7 @@ import type { DocumentData } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { auth } from '../config/firebase';
 import { enhancedThumbnailService } from './enhancedThumbnailService';
+import { validateUrl, sanitizeText, validateTag, rateLimiter } from '../utils/security';
 import type {
   Bookmark,
   BookmarkFormData,
@@ -110,17 +111,49 @@ const generateThumbnailData = async (url: string, isCreatingBookmark: boolean = 
 class BookmarkService {
   async createBookmark(formData: BookmarkFormData): Promise<Bookmark> {
     const userId = getCurrentUserId();
+    
+    // Rate limiting check
+    if (!rateLimiter.isAllowed(`bookmark-create-${userId}`, 10, 60000)) {
+      throw new Error('Too many bookmark creation attempts. Please wait a moment before trying again.');
+    }
+
+    // Validate and sanitize input data
+    const urlValidation = validateUrl(formData.url);
+    if (!urlValidation.isValid) {
+      throw new Error(urlValidation.error || 'Invalid URL');
+    }
+
+    const sanitizedTitle = sanitizeText(formData.title, 200);
+    if (!sanitizedTitle) {
+      throw new Error('Title is required');
+    }
+
+    const sanitizedDescription = sanitizeText(formData.description || '', 1000);
+    
+    // Validate and sanitize tags
+    const sanitizedTags: string[] = [];
+    for (const tag of formData.tags) {
+      const tagValidation = validateTag(tag);
+      if (tagValidation.isValid && tagValidation.sanitizedTag) {
+        sanitizedTags.push(tagValidation.sanitizedTag);
+      }
+    }
+
+    if (sanitizedTags.length > 20) {
+      throw new Error('Too many tags (maximum 20 allowed)');
+    }
+
     const now = new Date();
 
     // Generate thumbnail and favicon (skip access check since we're creating the bookmark)
-    const thumbnailData = await generateThumbnailData(formData.url, true);
+    const thumbnailData = await generateThumbnailData(urlValidation.sanitizedUrl!, true);
 
     const bookmarkData = {
       userId,
-      title: formData.title,
-      url: formData.url,
-      description: formData.description || '',
-      tags: formData.tags,
+      title: sanitizedTitle,
+      url: urlValidation.sanitizedUrl!,
+      description: sanitizedDescription,
+      tags: sanitizedTags,
       favicon: thumbnailData.favicon,
       thumbnail: thumbnailData.thumbnail,
       createdAt: now,
