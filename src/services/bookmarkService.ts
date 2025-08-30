@@ -147,6 +147,7 @@ class BookmarkService {
 
     // Generate thumbnail and favicon (skip access check since we're creating the bookmark)
     const thumbnailData = await generateThumbnailData(urlValidation.sanitizedUrl!, true);
+    console.log('Bookmark service - Generated thumbnail data:', thumbnailData);
 
     const bookmarkData = {
       userId,

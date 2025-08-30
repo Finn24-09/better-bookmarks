@@ -308,6 +308,7 @@ class EnhancedThumbnailService {
 
   /**
    * Main method to generate thumbnail with Firebase Storage integration
+   * Only stores screenshots in Firebase Storage, uses direct links for video thumbnails and favicons
    */
   async generateThumbnail(url: string, options: ThumbnailOptions = {}, skipAccessCheck: boolean = false): Promise<ThumbnailResult> {
     try {
@@ -322,19 +323,17 @@ class EnhancedThumbnailService {
       // Check browser cache first
       const cachedThumbnail = this.getCachedThumbnail(url);
       if (cachedThumbnail) {
-        return {
-          thumbnail: cachedThumbnail,
-          type: 'screenshot', // We don't store type in cache, assume screenshot
-          source: 'browser-cache'
-        };
+        // Don't assume type from cache, we need to determine it properly
+        // For now, let's skip cache to ensure we get the correct type
+        console.log('Found cached thumbnail, but skipping to ensure correct type determination');
       }
 
-      // Generate URL hash for Firebase Storage lookup
+      // Generate URL hash for Firebase Storage lookup (only for screenshots)
       const urlHash = await this.generateUrlHash(url);
 
-      // Check if thumbnail exists in Firebase Storage
+      // Check if screenshot exists in Firebase Storage
       const existingThumbnail = await this.checkThumbnailExists(urlHash);
-      if (existingThumbnail) {
+      if (existingThumbnail && existingThumbnail.type === 'screenshot') {
         // Update access statistics
         if (existingThumbnail.id) {
           await this.updateAccessStats(existingThumbnail.id);
@@ -350,11 +349,17 @@ class EnhancedThumbnailService {
         };
       }
 
-      // Thumbnail doesn't exist, generate new one using original service
+      // Generate new thumbnail using original service
       const thumbnailResult = await thumbnailService.generateThumbnail(url, options);
+      console.log('Generated thumbnail result:', {
+        type: thumbnailResult.type,
+        source: thumbnailResult.source,
+        hasThumbnail: !!thumbnailResult.thumbnail,
+        thumbnailUrl: thumbnailResult.thumbnail?.substring(0, 100) + '...'
+      });
 
-      // If we got a thumbnail, upload it to Firebase Storage
-      if (thumbnailResult.thumbnail) {
+      // Only upload screenshots to Firebase Storage, use direct links for everything else
+      if (thumbnailResult.thumbnail && thumbnailResult.type === 'screenshot') {
         try {
           const userId = this.getCurrentUserId();
           const metadata: ThumbnailMetadata = {
@@ -391,13 +396,19 @@ class EnhancedThumbnailService {
             source: `firebase-uploaded-${thumbnailResult.source}`
           };
         } catch (uploadError) {
-          console.error('Error uploading to Firebase Storage, using original thumbnail:', uploadError);
+          console.error('Error uploading screenshot to Firebase Storage, using original:', uploadError);
           
-          // Cache the original thumbnail locally as fallback
+          // Cache the original screenshot locally as fallback
           this.cacheThumbnailLocally(url, thumbnailResult.thumbnail);
           
           return thumbnailResult;
         }
+      }
+
+      // For video thumbnails and favicons, use direct links (don't store in Firebase)
+      if (thumbnailResult.thumbnail) {
+        // Cache the direct link locally
+        this.cacheThumbnailLocally(url, thumbnailResult.thumbnail);
       }
 
       return thumbnailResult;
@@ -423,7 +434,8 @@ class EnhancedThumbnailService {
   }
 
   /**
-   * Clean up old thumbnails (can be called periodically)
+   * Clean up old screenshots (can be called periodically)
+   * Only cleans up screenshots since video thumbnails and favicons are not stored in Firebase
    */
   async cleanupOldThumbnails(olderThanDays: number = 30): Promise<void> {
     try {
@@ -435,6 +447,7 @@ class EnhancedThumbnailService {
       const q = query(
         metadataRef,
         where('userId', '==', userId),
+        where('type', '==', 'screenshot'), // Only clean up screenshots
         where('lastAccessedAt', '<', Timestamp.fromDate(cutoffDate))
       );
 
@@ -455,31 +468,36 @@ class EnhancedThumbnailService {
             // Delete metadata
             await deleteDoc(doc.ref);
           } catch (deleteError) {
-            console.error('Error deleting old thumbnail:', deleteError);
+            console.error('Error deleting old screenshot:', deleteError);
           }
         }
       }
     } catch (error) {
-      console.error('Error cleaning up old thumbnails:', error);
+      console.error('Error cleaning up old screenshots:', error);
     }
   }
 
   /**
-   * Get thumbnail statistics for the current user
+   * Get screenshot statistics for the current user
+   * Only tracks screenshots since video thumbnails and favicons are not stored in Firebase
    */
   async getThumbnailStats(): Promise<{
-    totalThumbnails: number;
+    totalScreenshots: number;
     totalSize: number;
     byType: Record<string, number>;
   }> {
     try {
       const userId = this.getCurrentUserId();
       const metadataRef = collection(db, this.COLLECTION_NAME);
-      const q = query(metadataRef, where('userId', '==', userId));
+      const q = query(
+        metadataRef, 
+        where('userId', '==', userId),
+        where('type', '==', 'screenshot') // Only count screenshots
+      );
       const querySnapshot = await getDocs(q);
 
       const stats = {
-        totalThumbnails: querySnapshot.size,
+        totalScreenshots: querySnapshot.size,
         totalSize: 0,
         byType: {} as Record<string, number>
       };
@@ -492,9 +510,9 @@ class EnhancedThumbnailService {
 
       return stats;
     } catch (error) {
-      console.error('Error getting thumbnail stats:', error);
+      console.error('Error getting screenshot stats:', error);
       return {
-        totalThumbnails: 0,
+        totalScreenshots: 0,
         totalSize: 0,
         byType: {}
       };
