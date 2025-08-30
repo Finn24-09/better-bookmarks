@@ -4,6 +4,7 @@ import { useTheme } from "../hooks/useTheme";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import clsx from "clsx";
+import logo32 from "../assets/logo_32x32.png";
 
 interface HeaderProps {
   searchQuery: string;
@@ -40,15 +41,11 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Top row: Logo, Title, and Actions */}
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center space-x-2 min-w-0 flex-1">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                style={{
-                  background:
-                    "linear-gradient(to bottom right, #3b82f6, #2563eb)",
-                }}
-              >
-                <span className="text-white font-bold text-xs">B</span>
-              </div>
+              <img
+                src={logo32}
+                alt="Better Bookmarks Logo"
+                className="w-7 h-7 flex-shrink-0"
+              />
               <h1
                 className="text-lg font-bold truncate"
                 style={{ color: "var(--text-primary)" }}
@@ -143,15 +140,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="hidden sm:flex items-center justify-between h-16">
           {/* Logo and Title */}
           <div className="flex items-center space-x-3">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{
-                background:
-                  "linear-gradient(to bottom right, #3b82f6, #2563eb)",
-              }}
-            >
-              <span className="text-white font-bold text-sm">B</span>
-            </div>
+            <img src={logo32} alt="Better Bookmarks Logo" className="w-8 h-8" />
             <h1
               className="text-xl font-bold"
               style={{ color: "var(--text-primary)" }}
