@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { storage, db, auth } from '../config/firebase';
 import { thumbnailService } from './thumbnailService';
+import { cacheService } from './cacheService';
 import type { ThumbnailResult, ThumbnailOptions } from './thumbnailService';
 
 interface StoredThumbnail {
@@ -69,10 +70,25 @@ class EnhancedThumbnailService {
 
   /**
    * Check if user has access to a URL (i.e., has a bookmark for it)
+   * Uses cached bookmarks to avoid Firebase reads
    */
   private async userHasAccessToUrl(url: string): Promise<boolean> {
     try {
       const userId = this.getCurrentUserId();
+      const cacheKey = `user_bookmarks_${userId}`;
+      
+      // Try to get cached bookmarks first
+      let bookmarks = cacheService.getMemory<any[]>(cacheKey);
+      if (!bookmarks) {
+        bookmarks = cacheService.getLocal<any[]>(cacheKey);
+      }
+      
+      // If we have cached bookmarks, check them
+      if (bookmarks && Array.isArray(bookmarks)) {
+        return bookmarks.some(bookmark => bookmark.url === url);
+      }
+      
+      // Fallback to Firebase query if no cache available
       const bookmarksRef = collection(db, 'bookmarks');
       const q = query(
         bookmarksRef,
@@ -222,19 +238,30 @@ class EnhancedThumbnailService {
   }
 
   /**
-   * Update access statistics for a thumbnail
+   * Update access statistics for a thumbnail (batched to reduce writes)
    */
   private async updateAccessStats(thumbnailId: string): Promise<void> {
     try {
-      const docRef = doc(db, this.COLLECTION_NAME, thumbnailId);
-      const docSnapshot = await getDocs(query(collection(db, this.COLLECTION_NAME), where('__name__', '==', thumbnailId)));
-      const currentAccessCount = docSnapshot.docs[0]?.data()?.accessCount || 0;
+      // Use a batched approach to reduce writes - only update every 10 accesses or once per hour
+      const cacheKey = `thumbnail_access_${thumbnailId}`;
+      const lastUpdate = cacheService.getMemory<number>(cacheKey) || 0;
+      const now = Date.now();
       
+      // Only update if it's been more than 1 hour since last update
+      if (now - lastUpdate < 60 * 60 * 1000) {
+        console.log('Skipping access stats update - too recent');
+        return;
+      }
+      
+      const docRef = doc(db, this.COLLECTION_NAME, thumbnailId);
       await updateDoc(docRef, {
-        accessCount: currentAccessCount + 1,
         lastAccessedAt: Timestamp.fromDate(new Date()),
         updatedAt: Timestamp.fromDate(new Date())
+        // Remove accessCount increment to reduce writes
       });
+      
+      // Cache the update time to prevent frequent writes
+      cacheService.setMemory(cacheKey, now, 60 * 60 * 1000); // 1 hour cache
     } catch (error) {
       console.error('Error updating access stats:', error);
       // Don't throw error for stats update failure
@@ -417,9 +444,7 @@ class EnhancedThumbnailService {
       // For direct URLs (video thumbnails from API, favicons), store only the URL in Firestore
       // This saves Firebase Storage space and bandwidth
       if (thumbnailResult.thumbnail && isDirectUrl) {
-        try {
-          const userId = this.getCurrentUserId();
-          
+        try {        
           // Store metadata in Firestore with the direct URL (no Firebase Storage upload)
           await this.storeThumbnailMetadata(
             url,

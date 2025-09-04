@@ -16,6 +16,7 @@ import { db } from '../config/firebase';
 import { auth } from '../config/firebase';
 import { enhancedThumbnailService } from './enhancedThumbnailService';
 import { validateUrl, sanitizeText, validateTag, rateLimiter } from '../utils/security';
+import { cacheService } from './cacheService';
 import type {
   Bookmark,
   BookmarkFormData,
@@ -109,6 +110,68 @@ const generateThumbnailData = async (url: string, isCreatingBookmark: boolean = 
 };
 
 class BookmarkService {
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private readonly BOOKMARKS_CACHE_KEY = 'user_bookmarks';
+  private readonly TAGS_CACHE_KEY = 'user_tags';
+
+  /**
+   * Clear all bookmark-related caches
+   */
+  private clearBookmarkCaches(): void {
+    const userId = getCurrentUserId();
+    cacheService.remove(`${this.BOOKMARKS_CACHE_KEY}_${userId}`);
+    cacheService.remove(`${this.TAGS_CACHE_KEY}_${userId}`);
+  }
+
+  /**
+   * Get cached bookmarks or fetch from Firebase
+   */
+  private async getCachedBookmarks(): Promise<Bookmark[]> {
+    const userId = getCurrentUserId();
+    const cacheKey = `${this.BOOKMARKS_CACHE_KEY}_${userId}`;
+    
+    // Try memory cache first
+    let bookmarks = cacheService.getMemory<Bookmark[]>(cacheKey);
+    if (bookmarks) {
+      console.log('Using cached bookmarks from memory');
+      return this.deserializeBookmarks(bookmarks);
+    }
+
+    // Try localStorage cache
+    bookmarks = cacheService.getLocal<Bookmark[]>(cacheKey);
+    if (bookmarks) {
+      console.log('Using cached bookmarks from localStorage');
+      const deserializedBookmarks = this.deserializeBookmarks(bookmarks);
+      // Also cache in memory for faster access
+      cacheService.setMemory(cacheKey, deserializedBookmarks, this.CACHE_TTL);
+      return deserializedBookmarks;
+    }
+
+    // Fetch from Firebase
+    console.log('Fetching bookmarks from Firebase');
+    const bookmarksRef = collection(db, 'bookmarks');
+    const q = query(bookmarksRef, where('userId', '==', userId));
+    const querySnapshot = await getDocs(q);
+    bookmarks = querySnapshot.docs.map(convertFirestoreToBookmark);
+
+    // Cache the results
+    cacheService.setMemory(cacheKey, bookmarks, this.CACHE_TTL);
+    cacheService.setLocal(cacheKey, bookmarks, this.CACHE_TTL);
+
+    return bookmarks;
+  }
+
+  /**
+   * Deserialize cached bookmarks (convert date strings back to Date objects)
+   */
+  private deserializeBookmarks(bookmarks: any[]): Bookmark[] {
+    return bookmarks.map(bookmark => ({
+      ...bookmark,
+      createdAt: typeof bookmark.createdAt === 'string' ? new Date(bookmark.createdAt) : bookmark.createdAt,
+      updatedAt: typeof bookmark.updatedAt === 'string' ? new Date(bookmark.updatedAt) : bookmark.updatedAt
+    }));
+  }
+
   async createBookmark(formData: BookmarkFormData): Promise<Bookmark> {
     const userId = getCurrentUserId();
     
@@ -164,6 +227,9 @@ class BookmarkService {
     try {
       const docRef = await addDoc(collection(db, 'bookmarks'), convertBookmarkToFirestore(bookmarkData));
       
+      // Clear caches after creating bookmark
+      this.clearBookmarkCaches();
+      
       return {
         id: docRef.id,
         ...bookmarkData,
@@ -217,6 +283,9 @@ class BookmarkService {
 
       await updateDoc(bookmarkRef, convertBookmarkToFirestore(updateData));
 
+      // Clear caches after updating bookmark
+      this.clearBookmarkCaches();
+
       return {
         id,
         userId,
@@ -246,6 +315,9 @@ class BookmarkService {
       }
 
       await deleteDoc(bookmarkRef);
+      
+      // Clear caches after deleting bookmark
+      this.clearBookmarkCaches();
     } catch (error) {
       console.error('Error deleting bookmark:', error);
       throw new Error('Failed to delete bookmark');
@@ -257,15 +329,9 @@ class BookmarkService {
     page: number = 1,
     pageSize: number = 12
   ): Promise<{ bookmarks: Bookmark[]; pagination: PaginationInfo }> {
-    const userId = getCurrentUserId();
-    
     try {
-      // Use simple query while indexes are building
-      const bookmarksRef = collection(db, 'bookmarks');
-      const q = query(bookmarksRef, where('userId', '==', userId));
-      
-      const querySnapshot = await getDocs(q);
-      let bookmarks = querySnapshot.docs.map(convertFirestoreToBookmark);
+      // Use cached bookmarks to avoid Firebase reads
+      let bookmarks = await this.getCachedBookmarks();
 
       // Apply all filtering and sorting client-side for now
       
@@ -329,20 +395,40 @@ class BookmarkService {
 
   async getAllTags(): Promise<string[]> {
     const userId = getCurrentUserId();
+    const cacheKey = `${this.TAGS_CACHE_KEY}_${userId}`;
     
     try {
-      const q = query(collection(db, 'bookmarks'), where('userId', '==', userId));
-      const querySnapshot = await getDocs(q);
-      
+      // Try cache first
+      let tags = cacheService.getMemory<string[]>(cacheKey);
+      if (tags) {
+        console.log('Using cached tags from memory');
+        return tags;
+      }
+
+      tags = cacheService.getLocal<string[]>(cacheKey);
+      if (tags) {
+        console.log('Using cached tags from localStorage');
+        cacheService.setMemory(cacheKey, tags, this.CACHE_TTL);
+        return tags;
+      }
+
+      // Extract tags from cached bookmarks to avoid additional Firebase read
+      const bookmarks = await this.getCachedBookmarks();
       const tagSet = new Set<string>();
-      querySnapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        if (data.tags && Array.isArray(data.tags)) {
-          data.tags.forEach((tag: string) => tagSet.add(tag));
+      
+      bookmarks.forEach((bookmark) => {
+        if (bookmark.tags && Array.isArray(bookmark.tags)) {
+          bookmark.tags.forEach((tag: string) => tagSet.add(tag));
         }
       });
 
-      return Array.from(tagSet).sort();
+      tags = Array.from(tagSet).sort();
+      
+      // Cache the results
+      cacheService.setMemory(cacheKey, tags, this.CACHE_TTL);
+      cacheService.setLocal(cacheKey, tags, this.CACHE_TTL);
+
+      return tags;
     } catch (error) {
       console.error('Error fetching tags:', error);
       throw new Error('Failed to fetch tags');
@@ -353,6 +439,16 @@ class BookmarkService {
     const userId = getCurrentUserId();
     
     try {
+      // Try to find in cached bookmarks first
+      const bookmarks = await this.getCachedBookmarks();
+      const cachedBookmark = bookmarks.find(bookmark => bookmark.id === id);
+      
+      if (cachedBookmark) {
+        console.log('Using cached bookmark by ID');
+        return cachedBookmark;
+      }
+      
+      // Fallback to Firebase if not in cache
       const bookmarkRef = doc(db, 'bookmarks', id);
       const bookmarkDoc = await getDoc(bookmarkRef);
       
@@ -374,21 +470,15 @@ class BookmarkService {
 
   // Helper method to check if URL already exists for the current user
   async urlExists(url: string, excludeId?: string): Promise<boolean> {
-    const userId = getCurrentUserId();
-    
     try {
-      const q = query(
-        collection(db, 'bookmarks'),
-        where('userId', '==', userId),
-        where('url', '==', url)
-      );
-      const querySnapshot = await getDocs(q);
+      // Use cached bookmarks to avoid Firebase read
+      const bookmarks = await this.getCachedBookmarks();
       
       if (excludeId) {
-        return querySnapshot.docs.some(doc => doc.id !== excludeId);
+        return bookmarks.some(bookmark => bookmark.url === url && bookmark.id !== excludeId);
       }
       
-      return !querySnapshot.empty;
+      return bookmarks.some(bookmark => bookmark.url === url);
     } catch (error) {
       console.error('Error checking URL existence:', error);
       return false;
