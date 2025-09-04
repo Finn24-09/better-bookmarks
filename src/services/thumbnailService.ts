@@ -2,6 +2,16 @@ interface ThumbnailResult {
   thumbnail?: string;
   type: 'video' | 'screenshot' | 'favicon';
   source: string;
+  isVideoThumbnail?: boolean;
+  method?: string;
+}
+
+interface ApiThumbnailResponse {
+  thumbnailUrl: string;
+  isVideoThumbnail: boolean;
+  processingTime: string;
+  source: string;
+  method: string;
 }
 
 interface ThumbnailOptions {
@@ -138,9 +148,9 @@ class ThumbnailService {
   }
 
   /**
-   * Take a screenshot using the screenshot API
+   * Take a screenshot using the screenshot API with intelligent video thumbnail detection
    */
-  private async takeScreenshot(url: string, options: ThumbnailOptions = {}): Promise<string> {
+  private async takeScreenshot(url: string, options: ThumbnailOptions = {}): Promise<ThumbnailResult> {
     const {
       width = 400,
       height = 300,
@@ -171,6 +181,7 @@ class ThumbnailService {
           waitUntil: 'domcontentloaded',
           handleBanners: true,
           bannerTimeout: 5000,
+          detectVideoThumbnails: true, // Enable intelligent video thumbnail detection
         }),
       });
 
@@ -178,9 +189,37 @@ class ThumbnailService {
         throw new Error(`Screenshot API error: ${response.status} ${response.statusText}`);
       }
 
-      const imageBuffer = await response.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
-      return `data:image/${format};base64,${base64}`;
+      const contentType = response.headers.get('content-type');
+      const isVideoThumbnail = response.headers.get('X-Is-Video-Thumbnail') === 'true';
+      const videoDetectionMethod = response.headers.get('X-Video-Detection-Method');
+      const screenshotFormat = response.headers.get('X-Screenshot-Format');
+
+      // Check if response is JSON (thumbnail URL) or binary image data
+      if (contentType?.includes('application/json')) {
+        // API returned a JSON response with thumbnail URL
+        const jsonResponse: ApiThumbnailResponse = await response.json();
+        
+        return {
+          thumbnail: jsonResponse.thumbnailUrl,
+          type: jsonResponse.isVideoThumbnail ? 'video' : 'screenshot',
+          source: `api-${jsonResponse.source}`,
+          isVideoThumbnail: jsonResponse.isVideoThumbnail,
+          method: jsonResponse.method
+        };
+      } else {
+        // API returned binary image data
+        const imageBuffer = await response.arrayBuffer();
+        const base64 = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+        const dataUrl = `data:image/${format};base64,${base64}`;
+        
+        return {
+          thumbnail: dataUrl,
+          type: isVideoThumbnail ? 'video' : 'screenshot',
+          source: `api-${screenshotFormat || 'screenshot'}`,
+          isVideoThumbnail: isVideoThumbnail,
+          method: videoDetectionMethod || 'screenshot'
+        };
+      }
     } catch (error) {
       console.error('Screenshot API error:', error);
       throw error;
@@ -192,7 +231,15 @@ class ThumbnailService {
    */
   async generateThumbnail(url: string, options: ThumbnailOptions = {}): Promise<ThumbnailResult> {
     try {
-      // Step 1: Try to extract video thumbnail
+      // Step 1: Use the new API with intelligent video thumbnail detection first
+      try {
+        const apiResult = await this.takeScreenshot(url, options);
+        return apiResult;
+      } catch (screenshotError) {
+        console.warn('API screenshot failed, trying fallback methods:', screenshotError);
+      }
+
+      // Step 2: Try to extract video thumbnail using local methods as fallback
       const videoResult = this.extractVideoThumbnail(url);
       if (videoResult.thumbnail) {
         const isValid = await this.validateImageUrl(videoResult.thumbnail);
@@ -203,18 +250,6 @@ class ThumbnailService {
             source: videoResult.platform || 'unknown'
           };
         }
-      }
-
-      // Step 2: Try to take a screenshot
-      try {
-        const screenshot = await this.takeScreenshot(url, options);
-        return {
-          thumbnail: screenshot,
-          type: 'screenshot',
-          source: 'screenshot-api'
-        };
-      } catch (screenshotError) {
-        console.warn('Screenshot failed, falling back to favicon:', screenshotError);
       }
 
       // Step 3: Fallback to favicon

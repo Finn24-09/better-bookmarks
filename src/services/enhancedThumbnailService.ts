@@ -308,7 +308,7 @@ class EnhancedThumbnailService {
 
   /**
    * Main method to generate thumbnail with Firebase Storage integration
-   * Only stores screenshots in Firebase Storage, uses direct links for video thumbnails and favicons
+   * Only stores screenshots (base64 data URLs) in Firebase Storage, uses direct links for video thumbnails and favicons
    */
   async generateThumbnail(url: string, options: ThumbnailOptions = {}, skipAccessCheck: boolean = false): Promise<ThumbnailResult> {
     try {
@@ -345,21 +345,28 @@ class EnhancedThumbnailService {
         return {
           thumbnail: existingThumbnail.storageUrl,
           type: existingThumbnail.type,
-          source: `firebase-storage-${existingThumbnail.source}`
+          source: `firebase-storage-${existingThumbnail.source}`,
+          isVideoThumbnail: false, // Screenshots stored in Firebase are not video thumbnails
+          method: 'firebase-cache'
         };
       }
 
-      // Generate new thumbnail using original service
+      // Generate new thumbnail using updated service with intelligent detection
       const thumbnailResult = await thumbnailService.generateThumbnail(url, options);
       console.log('Generated thumbnail result:', {
         type: thumbnailResult.type,
         source: thumbnailResult.source,
+        isVideoThumbnail: thumbnailResult.isVideoThumbnail,
+        method: thumbnailResult.method,
         hasThumbnail: !!thumbnailResult.thumbnail,
-        thumbnailUrl: thumbnailResult.thumbnail?.substring(0, 100) + '...'
+        isDirectUrl: thumbnailResult.thumbnail && !thumbnailResult.thumbnail.startsWith('data:')
       });
 
-      // Only upload screenshots to Firebase Storage, use direct links for everything else
-      if (thumbnailResult.thumbnail && thumbnailResult.type === 'screenshot') {
+      // Determine if this is a direct URL (video thumbnail, favicon) or base64 data (screenshot)
+      const isDirectUrl = thumbnailResult.thumbnail && !thumbnailResult.thumbnail.startsWith('data:');
+      
+      // Only upload base64 screenshots to Firebase Storage, store direct URLs in Firestore only
+      if (thumbnailResult.thumbnail && !isDirectUrl && thumbnailResult.type === 'screenshot') {
         try {
           const userId = this.getCurrentUserId();
           const metadata: ThumbnailMetadata = {
@@ -393,7 +400,9 @@ class EnhancedThumbnailService {
           return {
             thumbnail: storageUrl,
             type: thumbnailResult.type,
-            source: `firebase-uploaded-${thumbnailResult.source}`
+            source: `firebase-uploaded-${thumbnailResult.source}`,
+            isVideoThumbnail: thumbnailResult.isVideoThumbnail,
+            method: thumbnailResult.method
           };
         } catch (uploadError) {
           console.error('Error uploading screenshot to Firebase Storage, using original:', uploadError);
@@ -405,8 +414,31 @@ class EnhancedThumbnailService {
         }
       }
 
-      // For video thumbnails and favicons, use direct links (don't store in Firebase)
-      if (thumbnailResult.thumbnail) {
+      // For direct URLs (video thumbnails from API, favicons), store only the URL in Firestore
+      // This saves Firebase Storage space and bandwidth
+      if (thumbnailResult.thumbnail && isDirectUrl) {
+        try {
+          const userId = this.getCurrentUserId();
+          
+          // Store metadata in Firestore with the direct URL (no Firebase Storage upload)
+          await this.storeThumbnailMetadata(
+            url,
+            urlHash,
+            thumbnailResult.thumbnail, // Store the direct URL as storageUrl
+            '', // No storage path since we're not uploading
+            thumbnailResult.type,
+            thumbnailResult.source
+          );
+
+          console.log('Stored direct URL in Firestore:', {
+            url: thumbnailResult.thumbnail.substring(0, 100) + '...',
+            type: thumbnailResult.type,
+            source: thumbnailResult.source
+          });
+        } catch (metadataError) {
+          console.warn('Error storing direct URL metadata, continuing with original result:', metadataError);
+        }
+
         // Cache the direct link locally
         this.cacheThumbnailLocally(url, thumbnailResult.thumbnail);
       }
