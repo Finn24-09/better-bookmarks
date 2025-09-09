@@ -261,7 +261,7 @@ export const BookmarkApp: React.FC = () => {
 
       {/* Watermark */}
       <Watermark
-        version="0.0.0"
+        version={__APP_VERSION__}
         githubUrl="https://github.com/Finn24-09/better-bookmarks"
       />
     </div>
