@@ -62,8 +62,11 @@ export const BookmarkFilters: React.FC<BookmarkFiltersProps> = ({
       }
     };
 
-    loadTags();
-  }, [refreshTrigger]);
+    // Only load tags if we don't have them yet or if explicitly refreshed
+    if (availableTags.length === 0 || (refreshTrigger && refreshTrigger > 0)) {
+      loadTags();
+    }
+  }, [refreshTrigger, availableTags.length]);
 
   const handleTagToggle = (tagName: string) => {
     if (selectedTags.includes(tagName)) {

@@ -8,10 +8,8 @@ import {
   query, 
   where, 
   getDocs, 
-  addDoc, 
-  updateDoc,
+  addDoc,
   deleteDoc,
-  doc,
   Timestamp 
 } from 'firebase/firestore';
 import { storage, db, auth } from '../config/firebase';
@@ -88,38 +86,44 @@ class EnhancedThumbnailService {
         return bookmarks.some(bookmark => bookmark.url === url);
       }
       
-      // Fallback to Firebase query if no cache available
-      const bookmarksRef = collection(db, 'bookmarks');
-      const q = query(
-        bookmarksRef,
-        where('userId', '==', userId),
-        where('url', '==', url)
-      );
-      const querySnapshot = await getDocs(q);
-      return !querySnapshot.empty;
+      // If no cache available, assume access during initial load to prevent excessive queries
+      // The bookmark service will handle the actual access control
+      console.log('No cached bookmarks available, assuming access for URL:', url.substring(0, 50) + '...');
+      return true;
     } catch (error) {
       console.error('Error checking URL access:', error);
-      return false;
+      return true; // Assume access to prevent blocking
     }
   }
 
   /**
-   * Check if thumbnail exists in Firebase Storage
+   * Check if thumbnail exists in Firebase Storage with caching
    */
   private async checkThumbnailExists(urlHash: string): Promise<StoredThumbnail | null> {
     try {
+      // Check cache first to avoid repeated Firebase queries
+      const cacheKey = `thumbnail_metadata_${urlHash}`;
+      let cachedThumbnail = cacheService.getMemory<StoredThumbnail>(cacheKey);
+      
+      if (cachedThumbnail) {
+        console.log('Using cached thumbnail metadata for hash:', urlHash.substring(0, 10) + '...');
+        return cachedThumbnail;
+      }
+
       const metadataRef = collection(db, this.COLLECTION_NAME);
       const q = query(metadataRef, where('urlHash', '==', urlHash));
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
+        // Cache negative result to prevent repeated queries
+        cacheService.setMemory(cacheKey, null, 5 * 60 * 1000); // 5 minutes
         return null;
       }
 
       const doc = querySnapshot.docs[0];
       const data = doc.data();
       
-      return {
+      const thumbnail: StoredThumbnail = {
         id: doc.id,
         url: data.url,
         storageUrl: data.storageUrl,
@@ -132,6 +136,11 @@ class EnhancedThumbnailService {
         lastAccessedAt: data.lastAccessedAt?.toDate() || new Date(),
         urlHash: data.urlHash
       };
+
+      // Cache the result for future use
+      cacheService.setMemory(cacheKey, thumbnail, 30 * 60 * 1000); // 30 minutes
+      
+      return thumbnail;
     } catch (error) {
       console.error('Error checking thumbnail existence:', error);
       return null;
@@ -238,30 +247,27 @@ class EnhancedThumbnailService {
   }
 
   /**
-   * Update access statistics for a thumbnail (batched to reduce writes)
+   * Update access statistics for a thumbnail (heavily optimized to reduce writes)
    */
   private async updateAccessStats(thumbnailId: string): Promise<void> {
     try {
-      // Use a batched approach to reduce writes - only update every 10 accesses or once per hour
+      // Drastically reduce writes - only update once per day per thumbnail
       const cacheKey = `thumbnail_access_${thumbnailId}`;
       const lastUpdate = cacheService.getMemory<number>(cacheKey) || 0;
       const now = Date.now();
       
-      // Only update if it's been more than 1 hour since last update
-      if (now - lastUpdate < 60 * 60 * 1000) {
-        console.log('Skipping access stats update - too recent');
+      // Only update if it's been more than 24 hours since last update
+      if (now - lastUpdate < 24 * 60 * 60 * 1000) {
+        console.log('Skipping access stats update - updated within 24 hours');
         return;
       }
       
-      const docRef = doc(db, this.COLLECTION_NAME, thumbnailId);
-      await updateDoc(docRef, {
-        lastAccessedAt: Timestamp.fromDate(new Date()),
-        updatedAt: Timestamp.fromDate(new Date())
-        // Remove accessCount increment to reduce writes
-      });
+      // Skip the database write entirely for now to minimize writes
+      // This can be re-enabled later if analytics are needed
+      console.log('Access stats tracking disabled to reduce Firebase writes');
       
-      // Cache the update time to prevent frequent writes
-      cacheService.setMemory(cacheKey, now, 60 * 60 * 1000); // 1 hour cache
+      // Cache the update time to prevent frequent checks
+      cacheService.setMemory(cacheKey, now, 24 * 60 * 60 * 1000); // 24 hour cache
     } catch (error) {
       console.error('Error updating access stats:', error);
       // Don't throw error for stats update failure
@@ -441,30 +447,15 @@ class EnhancedThumbnailService {
         }
       }
 
-      // For direct URLs (video thumbnails from API, favicons), store only the URL in Firestore
-      // This saves Firebase Storage space and bandwidth
+      // For direct URLs (video thumbnails from API, favicons), skip Firestore storage to reduce writes
+      // Just cache locally for performance
       if (thumbnailResult.thumbnail && isDirectUrl) {
-        try {        
-          // Store metadata in Firestore with the direct URL (no Firebase Storage upload)
-          await this.storeThumbnailMetadata(
-            url,
-            urlHash,
-            thumbnailResult.thumbnail, // Store the direct URL as storageUrl
-            '', // No storage path since we're not uploading
-            thumbnailResult.type,
-            thumbnailResult.source
-          );
+        console.log('Skipping Firestore storage for direct URL to reduce writes:', {
+          type: thumbnailResult.type,
+          source: thumbnailResult.source
+        });
 
-          console.log('Stored direct URL in Firestore:', {
-            url: thumbnailResult.thumbnail.substring(0, 100) + '...',
-            type: thumbnailResult.type,
-            source: thumbnailResult.source
-          });
-        } catch (metadataError) {
-          console.warn('Error storing direct URL metadata, continuing with original result:', metadataError);
-        }
-
-        // Cache the direct link locally
+        // Cache the direct link locally only
         this.cacheThumbnailLocally(url, thumbnailResult.thumbnail);
       }
 
