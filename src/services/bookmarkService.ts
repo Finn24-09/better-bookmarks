@@ -17,6 +17,7 @@ import { auth } from '../config/firebase';
 import { enhancedThumbnailService } from './enhancedThumbnailService';
 import { validateUrl, sanitizeText, validateTag, rateLimiter } from '../utils/security';
 import { cacheService } from './cacheService';
+import { handleError, createError, ErrorCategory } from '../utils/errorHandler';
 import type {
   Bookmark,
   BookmarkFormData,
@@ -28,7 +29,11 @@ import type {
 const getCurrentUserId = (): string => {
   const user = auth.currentUser;
   if (!user) {
-    throw new Error('User must be authenticated to perform this action');
+    throw createError(
+      'You must be signed in to perform this action.',
+      ErrorCategory.AUTHENTICATION,
+      'auth/unauthenticated'
+    );
   }
   return user.uid;
 };
@@ -94,8 +99,6 @@ const generateThumbnailData = async (url: string, isCreatingBookmark: boolean = 
       favicon: faviconUrl,
     };
   } catch (error) {
-    console.warn('Error generating thumbnail with enhanced service:', error);
-    
     // Fallback to just favicon if thumbnail generation fails
     try {
       const faviconUrl = `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`;
@@ -103,7 +106,6 @@ const generateThumbnailData = async (url: string, isCreatingBookmark: boolean = 
         favicon: faviconUrl,
       };
     } catch (faviconError) {
-      console.warn('Error generating favicon:', faviconError);
       return {};
     }
   }
@@ -133,14 +135,12 @@ class BookmarkService {
     // Try memory cache first
     let bookmarks = cacheService.getMemory<Bookmark[]>(cacheKey);
     if (bookmarks) {
-      console.log('Using cached bookmarks from memory');
       return this.deserializeBookmarks(bookmarks);
     }
 
     // Try localStorage cache
     bookmarks = cacheService.getLocal<Bookmark[]>(cacheKey);
     if (bookmarks) {
-      console.log('Using cached bookmarks from localStorage');
       const deserializedBookmarks = this.deserializeBookmarks(bookmarks);
       // Also cache in memory for faster access
       cacheService.setMemory(cacheKey, deserializedBookmarks, this.CACHE_TTL);
@@ -148,7 +148,6 @@ class BookmarkService {
     }
 
     // Fetch from Firebase
-    console.log('Fetching bookmarks from Firebase');
     const bookmarksRef = collection(db, 'bookmarks');
     const q = query(bookmarksRef, where('userId', '==', userId));
     const querySnapshot = await getDocs(q);
@@ -210,7 +209,6 @@ class BookmarkService {
 
     // Generate thumbnail and favicon (skip access check since we're creating the bookmark)
     const thumbnailData = await generateThumbnailData(urlValidation.sanitizedUrl!, true);
-    console.log('Bookmark service - Generated thumbnail data:', thumbnailData);
 
     const bookmarkData = {
       userId,
@@ -235,8 +233,8 @@ class BookmarkService {
         ...bookmarkData,
       };
     } catch (error) {
-      console.error('Error creating bookmark:', error);
-      throw new Error('Failed to create bookmark');
+      const userMessage = handleError(error, 'createBookmark');
+      throw new Error(userMessage);
     }
   }
 
@@ -293,8 +291,8 @@ class BookmarkService {
         createdAt: bookmarkData.createdAt?.toDate() || new Date(),
       };
     } catch (error) {
-      console.error('Error updating bookmark:', error);
-      throw new Error('Failed to update bookmark');
+      const userMessage = handleError(error, 'updateBookmark');
+      throw new Error(userMessage);
     }
   }
 
@@ -319,8 +317,8 @@ class BookmarkService {
       // Clear caches after deleting bookmark
       this.clearBookmarkCaches();
     } catch (error) {
-      console.error('Error deleting bookmark:', error);
-      throw new Error('Failed to delete bookmark');
+      const userMessage = handleError(error, 'deleteBookmark');
+      throw new Error(userMessage);
     }
   }
 
@@ -388,8 +386,8 @@ class BookmarkService {
         pagination,
       };
     } catch (error) {
-      console.error('Error fetching bookmarks:', error);
-      throw new Error('Failed to fetch bookmarks');
+      const userMessage = handleError(error, 'getBookmarks');
+      throw new Error(userMessage);
     }
   }
 
@@ -401,13 +399,11 @@ class BookmarkService {
       // Try cache first
       let tags = cacheService.getMemory<string[]>(cacheKey);
       if (tags) {
-        console.log('Using cached tags from memory');
         return tags;
       }
 
       tags = cacheService.getLocal<string[]>(cacheKey);
       if (tags) {
-        console.log('Using cached tags from localStorage');
         cacheService.setMemory(cacheKey, tags, this.CACHE_TTL);
         return tags;
       }
@@ -430,8 +426,8 @@ class BookmarkService {
 
       return tags;
     } catch (error) {
-      console.error('Error fetching tags:', error);
-      throw new Error('Failed to fetch tags');
+      const userMessage = handleError(error, 'getAllTags');
+      throw new Error(userMessage);
     }
   }
 
@@ -444,7 +440,6 @@ class BookmarkService {
       const cachedBookmark = bookmarks.find(bookmark => bookmark.id === id);
       
       if (cachedBookmark) {
-        console.log('Using cached bookmark by ID');
         return cachedBookmark;
       }
       
@@ -463,8 +458,8 @@ class BookmarkService {
 
       return convertFirestoreToBookmark(bookmarkDoc as QueryDocumentSnapshot<DocumentData>);
     } catch (error) {
-      console.error('Error fetching bookmark:', error);
-      throw new Error('Failed to fetch bookmark');
+      const userMessage = handleError(error, 'getBookmarkById');
+      throw new Error(userMessage);
     }
   }
 
@@ -480,7 +475,7 @@ class BookmarkService {
       
       return bookmarks.some(bookmark => bookmark.url === url);
     } catch (error) {
-      console.error('Error checking URL existence:', error);
+      // Silently fail for URL existence check to avoid blocking user actions
       return false;
     }
   }

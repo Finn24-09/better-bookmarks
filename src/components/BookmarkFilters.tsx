@@ -58,7 +58,7 @@ export const BookmarkFilters: React.FC<BookmarkFiltersProps> = ({
         const tags = await bookmarkService.getAllTags();
         setAvailableTags(tags);
       } catch (error) {
-        console.error("Error loading tags:", error);
+        // Silently handle tag loading errors
       }
     };
 

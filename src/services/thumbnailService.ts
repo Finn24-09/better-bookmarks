@@ -86,7 +86,6 @@ class ThumbnailService {
 
       return {};
     } catch (error) {
-      console.warn('Error extracting video thumbnail:', error);
       return {};
     }
   }
@@ -129,7 +128,6 @@ class ThumbnailService {
       const domain = urlObj.hostname;
       return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
     } catch (error) {
-      console.warn('Error generating favicon URL:', error);
       return '';
     }
   }
@@ -221,7 +219,6 @@ class ThumbnailService {
         };
       }
     } catch (error) {
-      console.error('Screenshot API error:', error);
       throw error;
     }
   }
@@ -236,7 +233,7 @@ class ThumbnailService {
         const apiResult = await this.takeScreenshot(url, options);
         return apiResult;
       } catch (screenshotError) {
-        console.warn('API screenshot failed, trying fallback methods:', screenshotError);
+        // API screenshot failed, continue with fallback methods
       }
 
       // Step 2: Try to extract video thumbnail using local methods as fallback
@@ -272,7 +269,6 @@ class ThumbnailService {
       };
 
     } catch (error) {
-      console.error('Thumbnail generation failed:', error);
       
       // Final fallback to favicon
       const faviconUrl = this.getFaviconUrl(url);

@@ -49,11 +49,9 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
     setImageLoading(false);
     // Track thumbnail access when image loads successfully
     if (bookmark.thumbnail && !imageError) {
-      enhancedThumbnailService
-        .trackThumbnailAccess(bookmark.url)
-        .catch((error) => {
-          console.warn("Failed to track thumbnail access:", error);
-        });
+      enhancedThumbnailService.trackThumbnailAccess(bookmark.url).catch(() => {
+        // Silently handle tracking errors
+      });
     }
   };
 
@@ -65,11 +63,9 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   // Track thumbnail access when component mounts (for cached/immediate loads)
   useEffect(() => {
     if (bookmark.thumbnail) {
-      enhancedThumbnailService
-        .trackThumbnailAccess(bookmark.url)
-        .catch((error) => {
-          console.warn("Failed to track thumbnail access:", error);
-        });
+      enhancedThumbnailService.trackThumbnailAccess(bookmark.url).catch(() => {
+        // Silently handle tracking errors
+      });
     }
   }, [bookmark.url, bookmark.thumbnail]);
 

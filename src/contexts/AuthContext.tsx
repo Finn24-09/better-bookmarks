@@ -12,6 +12,7 @@ import { auth } from "../config/firebase";
 import { AuthContext } from "./AuthContextDefinition";
 import type { AuthUser, AuthContextType } from "../types/auth";
 import { convertFirebaseUser } from "../types/auth";
+import { handleError } from "../utils/errorHandler";
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -41,7 +42,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
-      throw new Error(getAuthErrorMessage(error.code));
+      const userMessage = handleError(error, "login");
+      throw new Error(userMessage);
     }
   };
 
@@ -49,7 +51,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
-      throw new Error(getAuthErrorMessage(error.code));
+      const userMessage = handleError(error, "register");
+      throw new Error(userMessage);
     }
   };
 
@@ -57,7 +60,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       await signOut(auth);
     } catch (error: any) {
-      throw new Error("Failed to log out. Please try again.");
+      const userMessage = handleError(error, "logout");
+      throw new Error(userMessage);
     }
   };
 
@@ -65,7 +69,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       await sendPasswordResetEmail(auth, email);
     } catch (error: any) {
-      throw new Error(getAuthErrorMessage(error.code));
+      const userMessage = handleError(error, "resetPassword");
+      throw new Error(userMessage);
     }
   };
 
@@ -79,30 +84,4 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-// Helper function to convert Firebase error codes to user-friendly messages
-const getAuthErrorMessage = (errorCode: string): string => {
-  switch (errorCode) {
-    case "auth/user-not-found":
-      return "No account found with this email address.";
-    case "auth/wrong-password":
-      return "Incorrect password. Please try again.";
-    case "auth/email-already-in-use":
-      return "An account with this email address already exists.";
-    case "auth/weak-password":
-      return "Password should be at least 6 characters long.";
-    case "auth/invalid-email":
-      return "Please enter a valid email address.";
-    case "auth/user-disabled":
-      return "This account has been disabled. Please contact support.";
-    case "auth/too-many-requests":
-      return "Too many failed attempts. Please try again later.";
-    case "auth/network-request-failed":
-      return "Network error. Please check your connection and try again.";
-    case "auth/invalid-credential":
-      return "Invalid email or password. Please check your credentials.";
-    default:
-      return "An error occurred during authentication. Please try again.";
-  }
 };

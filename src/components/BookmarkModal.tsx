@@ -116,7 +116,7 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
         const tags = await bookmarkService.getAllTags();
         setAvailableTags(tags);
       } catch (err) {
-        console.error("Error loading tags:", err);
+        // Silently handle tag loading errors
       }
     };
 

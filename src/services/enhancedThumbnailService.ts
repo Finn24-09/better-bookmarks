@@ -88,10 +88,8 @@ class EnhancedThumbnailService {
       
       // If no cache available, assume access during initial load to prevent excessive queries
       // The bookmark service will handle the actual access control
-      console.log('No cached bookmarks available, assuming access for URL:', url.substring(0, 50) + '...');
       return true;
     } catch (error) {
-      console.error('Error checking URL access:', error);
       return true; // Assume access to prevent blocking
     }
   }
@@ -106,7 +104,6 @@ class EnhancedThumbnailService {
       let cachedThumbnail = cacheService.getMemory<StoredThumbnail>(cacheKey);
       
       if (cachedThumbnail) {
-        console.log('Using cached thumbnail metadata for hash:', urlHash.substring(0, 10) + '...');
         return cachedThumbnail;
       }
 
@@ -142,7 +139,6 @@ class EnhancedThumbnailService {
       
       return thumbnail;
     } catch (error) {
-      console.error('Error checking thumbnail existence:', error);
       return null;
     }
   }
@@ -204,7 +200,6 @@ class EnhancedThumbnailService {
 
       return { storageUrl, storagePath };
     } catch (error) {
-      console.error('Error uploading thumbnail to storage:', error);
       throw error;
     }
   }
@@ -241,7 +236,6 @@ class EnhancedThumbnailService {
       const docRef = await addDoc(collection(db, this.COLLECTION_NAME), metadataDoc);
       return docRef.id;
     } catch (error) {
-      console.error('Error storing thumbnail metadata:', error);
       throw error;
     }
   }
@@ -258,18 +252,15 @@ class EnhancedThumbnailService {
       
       // Only update if it's been more than 24 hours since last update
       if (now - lastUpdate < 24 * 60 * 60 * 1000) {
-        console.log('Skipping access stats update - updated within 24 hours');
         return;
       }
       
       // Skip the database write entirely for now to minimize writes
       // This can be re-enabled later if analytics are needed
-      console.log('Access stats tracking disabled to reduce Firebase writes');
       
       // Cache the update time to prevent frequent checks
       cacheService.setMemory(cacheKey, now, 24 * 60 * 60 * 1000); // 24 hour cache
     } catch (error) {
-      console.error('Error updating access stats:', error);
       // Don't throw error for stats update failure
     }
   }
@@ -294,7 +285,6 @@ class EnhancedThumbnailService {
         await this.updateAccessStats(existingThumbnail.id);
       }
     } catch (error) {
-      console.error('Error tracking thumbnail access:', error);
       // Don't throw error for tracking failure
     }
   }
@@ -312,7 +302,6 @@ class EnhancedThumbnailService {
       };
       localStorage.setItem(cacheKey, JSON.stringify(cacheData));
     } catch (error) {
-      console.warn('Error caching thumbnail locally:', error);
       // Don't throw error for cache failure
     }
   }
@@ -334,7 +323,6 @@ class EnhancedThumbnailService {
 
       return cacheData.url;
     } catch (error) {
-      console.warn('Error getting cached thumbnail:', error);
       return null;
     }
   }
@@ -358,7 +346,6 @@ class EnhancedThumbnailService {
       if (cachedThumbnail) {
         // Don't assume type from cache, we need to determine it properly
         // For now, let's skip cache to ensure we get the correct type
-        console.log('Found cached thumbnail, but skipping to ensure correct type determination');
       }
 
       // Generate URL hash for Firebase Storage lookup (only for screenshots)
@@ -386,14 +373,6 @@ class EnhancedThumbnailService {
 
       // Generate new thumbnail using updated service with intelligent detection
       const thumbnailResult = await thumbnailService.generateThumbnail(url, options);
-      console.log('Generated thumbnail result:', {
-        type: thumbnailResult.type,
-        source: thumbnailResult.source,
-        isVideoThumbnail: thumbnailResult.isVideoThumbnail,
-        method: thumbnailResult.method,
-        hasThumbnail: !!thumbnailResult.thumbnail,
-        isDirectUrl: thumbnailResult.thumbnail && !thumbnailResult.thumbnail.startsWith('data:')
-      });
 
       // Determine if this is a direct URL (video thumbnail, favicon) or base64 data (screenshot)
       const isDirectUrl = thumbnailResult.thumbnail && !thumbnailResult.thumbnail.startsWith('data:');
@@ -438,8 +417,6 @@ class EnhancedThumbnailService {
             method: thumbnailResult.method
           };
         } catch (uploadError) {
-          console.error('Error uploading screenshot to Firebase Storage, using original:', uploadError);
-          
           // Cache the original screenshot locally as fallback
           this.cacheThumbnailLocally(url, thumbnailResult.thumbnail);
           
@@ -450,19 +427,12 @@ class EnhancedThumbnailService {
       // For direct URLs (video thumbnails from API, favicons), skip Firestore storage to reduce writes
       // Just cache locally for performance
       if (thumbnailResult.thumbnail && isDirectUrl) {
-        console.log('Skipping Firestore storage for direct URL to reduce writes:', {
-          type: thumbnailResult.type,
-          source: thumbnailResult.source
-        });
-
         // Cache the direct link locally only
         this.cacheThumbnailLocally(url, thumbnailResult.thumbnail);
       }
 
       return thumbnailResult;
     } catch (error) {
-      console.error('Enhanced thumbnail generation failed:', error);
-      
       // Fallback to original service if user has access or during bookmark creation
       try {
         if (skipAccessCheck) {
@@ -474,7 +444,7 @@ class EnhancedThumbnailService {
           return await thumbnailService.generateThumbnail(url, options);
         }
       } catch (fallbackError) {
-        console.error('Fallback thumbnail generation failed:', fallbackError);
+        // Fallback failed, will throw original error
       }
 
       throw error;
@@ -516,12 +486,12 @@ class EnhancedThumbnailService {
             // Delete metadata
             await deleteDoc(doc.ref);
           } catch (deleteError) {
-            console.error('Error deleting old screenshot:', deleteError);
+            // Continue with other deletions even if one fails
           }
         }
       }
     } catch (error) {
-      console.error('Error cleaning up old screenshots:', error);
+      // Cleanup errors are not critical
     }
   }
 
@@ -558,7 +528,6 @@ class EnhancedThumbnailService {
 
       return stats;
     } catch (error) {
-      console.error('Error getting screenshot stats:', error);
       return {
         totalScreenshots: 0,
         totalSize: 0,

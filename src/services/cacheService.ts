@@ -63,7 +63,7 @@ class CacheService {
 
       localStorage.setItem(`cache_${key}`, JSON.stringify(entry));
     } catch (error) {
-      console.warn('Failed to set localStorage cache:', error);
+      // Silently fail for localStorage operations
     }
   }
 
@@ -84,7 +84,6 @@ class CacheService {
 
       return entry.data;
     } catch (error) {
-      console.warn('Failed to get localStorage cache:', error);
       return null;
     }
   }
@@ -97,7 +96,7 @@ class CacheService {
     try {
       localStorage.removeItem(`cache_${key}`);
     } catch (error) {
-      console.warn('Failed to remove from localStorage:', error);
+      // Silently fail for localStorage operations
     }
   }
 
@@ -114,7 +113,7 @@ class CacheService {
         }
       });
     } catch (error) {
-      console.warn('Failed to clear localStorage cache:', error);
+      // Silently fail for localStorage operations
     }
   }
 
