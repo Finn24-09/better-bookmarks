@@ -79,40 +79,6 @@ docker-compose down
 
 The application will be available at `http://localhost:3000`
 
-### 4. Production Deployment
-
-For production environments, create a `docker-compose.prod.yml`:
-
-```yaml
-version: "3.8"
-services:
-  better-bookmarks:
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.25"
-          memory: 256M
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-```
-
-Deploy with:
-
-```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
 ## 📋 Dependencies
 
 ### Better Bookmarks Scraper Service
