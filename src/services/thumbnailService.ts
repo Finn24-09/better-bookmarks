@@ -73,15 +73,10 @@ class ThumbnailService {
         }
       }
       
-      // Twitch video/stream detection
+      // Twitch video/stream detection - handled separately in generateThumbnail due to async API call
       else if (domain.includes('twitch.tv')) {
-        const channelName = this.extractTwitchChannel(url);
-        if (channelName) {
-          return {
-            thumbnail: `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channelName}-640x360.jpg`,
-            platform: 'twitch'
-          };
-        }
+        // Return empty object to indicate Twitch URL detected but needs async handling
+        return { platform: 'twitch' };
       }
 
       return {};
@@ -117,6 +112,69 @@ class ThumbnailService {
   private extractTwitchChannel(url: string): string | null {
     const match = url.match(/twitch\.tv\/([^/?]+)/);
     return match ? match[1] : null;
+  }
+
+  /**
+   * Get Twitch user profile picture using Twitch API
+   */
+  private async getTwitchProfilePicture(channelName: string): Promise<string | null> {
+    try {
+      // Try multiple services for getting Twitch profile pictures
+      const services = [
+        `https://decapi.me/twitch/avatar/${channelName}`,
+        `https://api.ivr.fi/v2/twitch/user?login=${channelName}`,
+        `https://twitchtracker.com/api/channels/summary/${channelName}`
+      ];
+      
+      // Try decapi.me first
+      try {
+        const response = await fetch(services[0]);
+        if (response.ok) {
+          const avatarUrl = await response.text();
+          // Check if it's a valid image URL (not an error message)
+          if (avatarUrl.startsWith('http') && !avatarUrl.includes('error')) {
+            const isValid = await this.validateImageUrl(avatarUrl.trim());
+            if (isValid) {
+              return avatarUrl.trim();
+            }
+          }
+        }
+      } catch (error) {
+        // Continue to next service
+      }
+      
+      // Try ivr.fi API
+      try {
+        const response = await fetch(services[1]);
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0 && data[0].logo) {
+            const isValid = await this.validateImageUrl(data[0].logo);
+            if (isValid) {
+              return data[0].logo;
+            }
+          }
+        }
+      } catch (error) {
+        // Continue to next approach
+      }
+      
+      // Fallback: Use a constructed URL pattern that often works
+      // Twitch profile pictures follow a pattern, though this is not guaranteed
+      const constructedUrl = `https://static-cdn.jtvnw.net/jtv_user_pictures/${channelName}-profile_image-300x300.png`;
+      try {
+        const isValid = await this.validateImageUrl(constructedUrl);
+        if (isValid) {
+          return constructedUrl;
+        }
+      } catch (error) {
+        // Continue to final fallback
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
+    }
   }
 
   /**
@@ -236,7 +294,31 @@ class ThumbnailService {
         // API screenshot failed, continue with fallback methods
       }
 
-      // Step 2: Try to extract video thumbnail using local methods as fallback
+      // Step 2: Handle Twitch URLs specifically (requires async call)
+      try {
+        const urlObj = new URL(url);
+        const domain = urlObj.hostname.toLowerCase();
+        
+        if (domain.includes('twitch.tv')) {
+          const channelName = this.extractTwitchChannel(url);
+          if (channelName) {
+            const twitchProfilePicture = await this.getTwitchProfilePicture(channelName);
+            if (twitchProfilePicture) {
+              return {
+                thumbnail: twitchProfilePicture,
+                type: 'video',
+                source: 'twitch-profile',
+                isVideoThumbnail: true,
+                method: 'profile-picture'
+              };
+            }
+          }
+        }
+      } catch (twitchError) {
+        // Twitch API failed, continue with other fallback methods
+      }
+
+      // Step 3: Try to extract video thumbnail using local methods as fallback
       const videoResult = this.extractVideoThumbnail(url);
       if (videoResult.thumbnail) {
         const isValid = await this.validateImageUrl(videoResult.thumbnail);
@@ -249,7 +331,7 @@ class ThumbnailService {
         }
       }
 
-      // Step 3: Fallback to favicon
+      // Step 4: Fallback to favicon
       const faviconUrl = this.getFaviconUrl(url);
       if (faviconUrl) {
         const isValid = await this.validateImageUrl(faviconUrl);
@@ -262,7 +344,7 @@ class ThumbnailService {
         }
       }
 
-      // Step 4: No thumbnail available
+      // Step 5: No thumbnail available
       return {
         type: 'favicon',
         source: 'none'
