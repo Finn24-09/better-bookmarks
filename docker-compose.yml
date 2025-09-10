@@ -1,13 +1,48 @@
+version: '3.8'
+
 services:
   better-bookmarks:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+        - BUILD_DATE=${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        - VCS_REF=${VCS_REF:-$(git rev-parse --short HEAD)}
     container_name: better-bookmarks-app
     ports:
       - "80:80"
     environment:
       - NODE_ENV=production
+      - PORT=80
     env_file:
       - .env
+    # Security configurations
+    security_opt:
+      - no-new-privileges:true
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Restart policy
     restart: unless-stopped
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "com.docker.compose.project,com.docker.compose.service"
+    
+    # Network configuration
+    networks:
+      - better-bookmarks-network
+
+# Networks configuration
+networks:
+  better-bookmarks-network:
+    driver: bridge
