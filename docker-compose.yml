@@ -1,0 +1,13 @@
+services:
+  better-bookmarks:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: better-bookmarks-app
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    restart: unless-stopped
