@@ -27,6 +27,10 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Set permissions for security (nginx runs as non-root by default on alpine)
 RUN chown -R nginx:nginx /usr/share/nginx/html
 
@@ -36,4 +40,4 @@ EXPOSE 80
 # Healthcheck
 HEALTHCHECK CMD wget -qO- http://localhost:80 || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/entrypoint.sh"]

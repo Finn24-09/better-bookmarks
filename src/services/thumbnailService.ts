@@ -22,14 +22,16 @@ interface ThumbnailOptions {
   timeout?: number;
 }
 
+import { getEnvVarWithFallback } from '../utils/env';
+
 class ThumbnailService {
   private screenshotApiUrl: string;
   private apiKey: string;
 
   constructor() {
     // These should be set via environment variables
-    this.screenshotApiUrl = import.meta.env.VITE_SCREENSHOT_API_URL || 'http://localhost:8080';
-    this.apiKey = import.meta.env.VITE_SCREENSHOT_API_KEY || '';
+    this.screenshotApiUrl = getEnvVarWithFallback('VITE_SCREENSHOT_API_URL', 'http://localhost:8080');
+    this.apiKey = getEnvVarWithFallback('VITE_SCREENSHOT_API_KEY', '');
   }
 
   /**

@@ -13,8 +13,19 @@ import { BookmarkApp } from "./components/BookmarkApp";
 import { LoginPage } from "./components/LoginPage";
 import { RegisterPage } from "./components/RegisterPage";
 import { ForgotPasswordPage } from "./components/ForgotPasswordPage";
+import ConfigurationError from "./components/ConfigurationError";
+import { isFirebaseConfigured } from "./config/firebase";
 
 const App: React.FC = () => {
+  // Check if Firebase is configured
+  if (!isFirebaseConfigured) {
+    return (
+      <ThemeProvider>
+        <ConfigurationError />
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider>
       <ToastProvider>
