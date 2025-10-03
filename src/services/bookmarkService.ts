@@ -254,13 +254,39 @@ class BookmarkService {
         throw new Error('Unauthorized: You can only update your own bookmarks');
       }
 
+      // Validate and sanitize input data
+      const urlValidation = validateUrl(formData.url);
+      if (!urlValidation.isValid) {
+        throw new Error(urlValidation.error || 'Invalid URL');
+      }
+
+      const sanitizedTitle = sanitizeText(formData.title, 200);
+      if (!sanitizedTitle) {
+        throw new Error('Title is required');
+      }
+
+      const sanitizedDescription = sanitizeText(formData.description || '', 1000);
+      
+      // Validate and sanitize tags
+      const sanitizedTags: string[] = [];
+      for (const tag of formData.tags) {
+        const tagValidation = validateTag(tag);
+        if (tagValidation.isValid && tagValidation.sanitizedTag) {
+          sanitizedTags.push(tagValidation.sanitizedTag);
+        }
+      }
+
+      if (sanitizedTags.length > 20) {
+        throw new Error('Too many tags (maximum 20 allowed)');
+      }
+
       // Check if URL changed to regenerate thumbnails
-      const urlChanged = bookmarkData.url !== formData.url;
+      const urlChanged = bookmarkData.url !== urlValidation.sanitizedUrl;
       let thumbnailData: { favicon?: string; thumbnail?: string };
 
       if (urlChanged) {
         // Regenerate thumbnails if URL changed (don't skip access check since bookmark exists)
-        thumbnailData = await generateThumbnailData(formData.url, false);
+        thumbnailData = await generateThumbnailData(urlValidation.sanitizedUrl!, false);
       } else {
         // Keep existing thumbnails
         thumbnailData = {
@@ -269,15 +295,21 @@ class BookmarkService {
         };
       }
 
-      const updateData = {
-        title: formData.title,
-        url: formData.url,
-        description: formData.description || '',
-        tags: formData.tags,
-        favicon: thumbnailData.favicon,
-        thumbnail: thumbnailData.thumbnail,
+      const updateData: any = {
+        title: sanitizedTitle,
+        url: urlValidation.sanitizedUrl!,
+        description: sanitizedDescription,
+        tags: sanitizedTags,
         updatedAt: new Date(),
       };
+
+      // Only add favicon and thumbnail if they exist (Firebase doesn't allow undefined)
+      if (thumbnailData.favicon) {
+        updateData.favicon = thumbnailData.favicon;
+      }
+      if (thumbnailData.thumbnail) {
+        updateData.thumbnail = thumbnailData.thumbnail;
+      }
 
       await updateDoc(bookmarkRef, convertBookmarkToFirestore(updateData));
 

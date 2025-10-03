@@ -123,24 +123,30 @@ export function getErrorMessage(error: any): string {
     return FIREBASE_ERROR_MESSAGES[code];
   }
 
-  // Check for specific error messages
+  // Get the error message
   const message = error?.message || '';
   
-  // Handle common validation errors
-  if (message.includes('Invalid URL')) {
-    return 'Please enter a valid URL.';
-  }
-  if (message.includes('Title is required')) {
-    return 'Please enter a title for your bookmark.';
-  }
-  if (message.includes('Too many tags')) {
-    return 'You can add a maximum of 20 tags per bookmark.';
-  }
-  if (message.includes('rate limit') || message.includes('Too many')) {
-    return 'Too many requests. Please wait a moment before trying again.';
+  // If there's no Firebase error code, this is likely an error from our own validation
+  // Pass it through directly since our validation messages are already user-friendly
+  if (message && !code) {
+    // Only filter out technical/system errors, let validation messages through
+    const technicalPatterns = [
+      'undefined',
+      'null',
+      'NaN',
+      'Cannot read',
+      'Cannot set',
+      'is not a function',
+      'is not defined'
+    ];
+    
+    // If it's not a technical error, pass it through as-is
+    if (!technicalPatterns.some(pattern => message.includes(pattern))) {
+      return message;
+    }
   }
 
-  // Use category-based fallback
+  // Use category-based fallback only for unknown/technical errors
   const category = categorizeError(error);
   return CATEGORY_ERROR_MESSAGES[category];
 }
