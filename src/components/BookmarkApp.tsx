@@ -139,7 +139,7 @@ export const BookmarkApp: React.FC = () => {
   const handleRegenerateThumbnail = useCallback(
     async (id: string) => {
       try {
-        const updatedBookmark = await bookmarkService.regenerateThumbnail(id);
+        await bookmarkService.regenerateThumbnail(id);
         showToast("success", "Thumbnail regenerated successfully!");
 
         // Force a complete refresh from Firebase
