@@ -136,6 +136,29 @@ export const BookmarkApp: React.FC = () => {
     [showToast, refreshBookmarks]
   );
 
+  const handleRegenerateThumbnail = useCallback(
+    async (id: string) => {
+      try {
+        const updatedBookmark = await bookmarkService.regenerateThumbnail(id);
+        showToast("success", "Thumbnail regenerated successfully!");
+
+        // Force a complete refresh from Firebase
+        await refreshBookmarks();
+        setRefreshTrigger((prev) => prev + 1);
+
+        // Force page to re-render by updating current page
+        setCurrentPage((prev) => prev);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to regenerate thumbnail";
+        showToast("error", message);
+      }
+    },
+    [showToast, refreshBookmarks]
+  );
+
   // Search handler with debouncing
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
@@ -197,6 +220,7 @@ export const BookmarkApp: React.FC = () => {
                 bookmark={bookmark}
                 onEdit={handleEditBookmark}
                 onDelete={handleDeleteBookmark}
+                onRegenerateThumbnail={handleRegenerateThumbnail}
               />
             </div>
           ))}

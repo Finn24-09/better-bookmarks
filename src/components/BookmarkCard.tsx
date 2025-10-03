@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { ExternalLink, Edit, Trash2, Globe, MoreVertical } from "lucide-react";
+import {
+  ExternalLink,
+  Edit,
+  Trash2,
+  Globe,
+  MoreVertical,
+  RefreshCw,
+} from "lucide-react";
 import type { Bookmark } from "../types/bookmark";
 import { enhancedThumbnailService } from "../services/enhancedThumbnailService";
 import clsx from "clsx";
@@ -8,16 +15,19 @@ interface BookmarkCardProps {
   bookmark: Bookmark;
   onEdit: (bookmark: Bookmark) => void;
   onDelete: (id: string) => void;
+  onRegenerateThumbnail?: (id: string) => void;
 }
 
 export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   bookmark,
   onEdit,
   onDelete,
+  onRegenerateThumbnail,
 }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [showActions, setShowActions] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   // Generate a consistent color for each tag based on its name
   const getTagColor = (tag: string) => {
@@ -47,8 +57,12 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
   const handleImageLoad = () => {
     setImageLoading(false);
-    // Track thumbnail access when image loads successfully
-    if (bookmark.thumbnail && !imageError) {
+    // Track thumbnail access ONLY for Firebase Storage URLs (not direct URLs)
+    if (
+      bookmark.thumbnail &&
+      !imageError &&
+      bookmark.thumbnail.includes("firebasestorage.googleapis.com")
+    ) {
       enhancedThumbnailService.trackThumbnailAccess(bookmark.url).catch(() => {
         // Silently handle tracking errors
       });
@@ -61,8 +75,12 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
   };
 
   // Track thumbnail access when component mounts (for cached/immediate loads)
+  // ONLY for Firebase Storage URLs (not direct URLs)
   useEffect(() => {
-    if (bookmark.thumbnail) {
+    if (
+      bookmark.thumbnail &&
+      bookmark.thumbnail.includes("firebasestorage.googleapis.com")
+    ) {
       enhancedThumbnailService.trackThumbnailAccess(bookmark.url).catch(() => {
         // Silently handle tracking errors
       });
@@ -86,6 +104,22 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
 
   const openBookmark = () => {
     window.open(bookmark.url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleRegenerateThumbnail = async () => {
+    if (!onRegenerateThumbnail || isRegenerating) return;
+
+    setIsRegenerating(true);
+    setShowActions(false);
+
+    try {
+      await onRegenerateThumbnail(bookmark.id);
+      // States will be reset by useEffect when bookmark.thumbnail changes
+    } catch (error) {
+      // Error handling is done in parent component
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   return (
@@ -133,6 +167,21 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
             >
               <Edit className="h-4 w-4 text-gray-700" />
             </button>
+            {onRegenerateThumbnail && (
+              <button
+                onClick={handleRegenerateThumbnail}
+                disabled={isRegenerating}
+                className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Regenerate thumbnail"
+              >
+                <RefreshCw
+                  className={clsx(
+                    "h-4 w-4 text-gray-700",
+                    isRegenerating && "animate-spin"
+                  )}
+                />
+              </button>
+            )}
             <button
               onClick={() => onDelete(bookmark.id)}
               className="p-2 bg-white rounded-full shadow-lg hover:bg-red-50 transition-colors duration-200"
@@ -163,7 +212,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                 />
 
                 {/* Actions Menu */}
-                <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[140px]">
+                <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[180px]">
                   <button
                     onClick={() => {
                       openBookmark();
@@ -186,6 +235,22 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                     <Edit className="h-4 w-4" />
                     <span>Edit</span>
                   </button>
+                  {onRegenerateThumbnail && (
+                    <button
+                      onClick={handleRegenerateThumbnail}
+                      disabled={isRegenerating}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      <RefreshCw
+                        className={clsx(
+                          "h-4 w-4",
+                          isRegenerating && "animate-spin"
+                        )}
+                      />
+                      <span>Regenerate Thumbnail</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       onDelete(bookmark.id);

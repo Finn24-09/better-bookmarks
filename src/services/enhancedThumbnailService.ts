@@ -8,8 +8,12 @@ import {
   query, 
   where, 
   getDocs, 
+  getDoc,
   addDoc,
   deleteDoc,
+  doc,
+  updateDoc,
+  increment,
   Timestamp 
 } from 'firebase/firestore';
 import { storage, db, auth } from '../config/firebase';
@@ -242,6 +246,7 @@ class EnhancedThumbnailService {
 
   /**
    * Update access statistics for a thumbnail (heavily optimized to reduce writes)
+   * Uses a 24-hour cooldown to prevent excessive database writes
    */
   private async updateAccessStats(thumbnailId: string): Promise<void> {
     try {
@@ -255,13 +260,55 @@ class EnhancedThumbnailService {
         return;
       }
       
-      // Skip the database write entirely for now to minimize writes
-      // This can be re-enabled later if analytics are needed
+      // Update lastAccessedAt in Firestore with cooldown
+      const metadataRef = doc(db, this.COLLECTION_NAME, thumbnailId);
+      await updateDoc(metadataRef, {
+        lastAccessedAt: Timestamp.fromDate(new Date()),
+        accessCount: increment(1)
+      });
       
       // Cache the update time to prevent frequent checks
       cacheService.setMemory(cacheKey, now, 24 * 60 * 60 * 1000); // 24 hour cache
+      
+      // Invalidate the metadata cache since we updated it
+      const thumbnail = await this.getStoredThumbnailById(thumbnailId);
+      if (thumbnail) {
+        const urlHash = thumbnail.urlHash;
+        cacheService.remove(`thumbnail_metadata_${urlHash}`);
+      }
     } catch (error) {
       // Don't throw error for stats update failure
+    }
+  }
+
+  /**
+   * Get stored thumbnail by ID (helper method)
+   */
+  private async getStoredThumbnailById(thumbnailId: string): Promise<StoredThumbnail | null> {
+    try {
+      const metadataRef = doc(db, this.COLLECTION_NAME, thumbnailId);
+      const docSnap = await getDoc(metadataRef);
+      
+      if (!docSnap.exists()) {
+        return null;
+      }
+      
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        url: data.url,
+        storageUrl: data.storageUrl,
+        storagePath: data.storagePath,
+        type: data.type,
+        source: data.source,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+        accessCount: data.accessCount || 0,
+        lastAccessedAt: data.lastAccessedAt?.toDate() || new Date(),
+        urlHash: data.urlHash
+      };
+    } catch (error) {
+      return null;
     }
   }
 
@@ -533,6 +580,98 @@ class EnhancedThumbnailService {
         totalSize: 0,
         byType: {}
       };
+    }
+  }
+
+  /**
+   * Regenerate thumbnail for a bookmark without replacing existing Firebase Storage images
+   * This creates a new thumbnail and updates only the bookmark's thumbnail reference
+   */
+  async regenerateThumbnail(url: string, forceNew: boolean = true): Promise<ThumbnailResult> {
+    try {
+      // Check if user has access to this URL
+      const hasAccess = await this.userHasAccessToUrl(url);
+      if (!hasAccess) {
+        throw new Error('Access denied: You must have a bookmark for this URL to regenerate its thumbnail');
+      }
+
+      // Clear browser cache for this URL to force fresh generation
+      if (forceNew) {
+        const cacheKey = `thumbnail_${url}`;
+        localStorage.removeItem(cacheKey);
+        
+        // Also clear the metadata cache to force fresh lookup
+        const urlHash = await this.generateUrlHash(url);
+        cacheService.remove(`thumbnail_metadata_${urlHash}`);
+      }
+
+      // Generate new thumbnail using the thumbnail service
+      // This will bypass Firebase Storage cache and generate a fresh thumbnail
+      const thumbnailResult = await thumbnailService.generateThumbnail(url, {});
+
+      // Determine if this is a direct URL (video thumbnail, favicon) or base64 data (screenshot)
+      const isDirectUrl = thumbnailResult.thumbnail && !thumbnailResult.thumbnail.startsWith('data:');
+      
+      // For screenshots (base64 data), we create a NEW storage entry with a unique identifier
+      // This prevents overwriting existing images that other users might be using
+      if (thumbnailResult.thumbnail && !isDirectUrl && thumbnailResult.type === 'screenshot') {
+        try {
+          const userId = this.getCurrentUserId();
+          
+          // Generate a unique hash that includes timestamp to avoid conflicts
+          const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+          const urlHash = await this.generateUrlHash(url);
+          const uniqueHash = `${urlHash}_${uniqueId}`;
+          
+          const metadata: ThumbnailMetadata = {
+            url,
+            type: thumbnailResult.type,
+            source: `regenerated-${thumbnailResult.source}`,
+            createdAt: new Date().toISOString(),
+            urlHash: uniqueHash,
+            userId
+          };
+
+          const { storageUrl, storagePath } = await this.uploadThumbnailToStorage(
+            thumbnailResult.thumbnail,
+            uniqueHash,
+            metadata
+          );
+
+          // Store metadata in Firestore for the regenerated thumbnail
+          await this.storeThumbnailMetadata(
+            url,
+            uniqueHash,
+            storageUrl,
+            storagePath,
+            thumbnailResult.type,
+            `regenerated-${thumbnailResult.source}`
+          );
+
+          // Cache the new Firebase Storage URL locally
+          this.cacheThumbnailLocally(url, storageUrl);
+
+          return {
+            thumbnail: storageUrl,
+            type: thumbnailResult.type,
+            source: `regenerated-${thumbnailResult.source}`,
+            isVideoThumbnail: thumbnailResult.isVideoThumbnail,
+            method: 'regenerated'
+          };
+        } catch (uploadError) {
+          // If upload fails, return the original result
+          return thumbnailResult;
+        }
+      }
+
+      // For direct URLs (video thumbnails, favicons), just cache locally
+      if (thumbnailResult.thumbnail && isDirectUrl) {
+        this.cacheThumbnailLocally(url, thumbnailResult.thumbnail);
+      }
+
+      return thumbnailResult;
+    } catch (error) {
+      throw error;
     }
   }
 

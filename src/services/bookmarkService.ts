@@ -479,6 +479,65 @@ class BookmarkService {
       return false;
     }
   }
+
+  /**
+   * Regenerate thumbnail for an existing bookmark
+   * This creates a new thumbnail without replacing existing Firebase Storage images
+   */
+  async regenerateThumbnail(id: string): Promise<Bookmark> {
+    const userId = getCurrentUserId();
+    const bookmarkRef = doc(db, 'bookmarks', id);
+
+    try {
+      // First, verify the bookmark belongs to the current user
+      const bookmarkDoc = await getDoc(bookmarkRef);
+      if (!bookmarkDoc.exists()) {
+        throw new Error('Bookmark not found');
+      }
+
+      const bookmarkData = bookmarkDoc.data();
+      if (bookmarkData.userId !== userId) {
+        throw new Error('Unauthorized: You can only regenerate thumbnails for your own bookmarks');
+      }
+
+      // Clear ALL caches before regeneration to ensure fresh data
+      this.clearBookmarkCaches();
+      
+      // Also clear the local browser cache for this thumbnail
+      const thumbnailCacheKey = `thumbnail_${bookmarkData.url}`;
+      localStorage.removeItem(thumbnailCacheKey);
+
+      // Regenerate the thumbnail using the enhanced service
+      const thumbnailResult = await enhancedThumbnailService.regenerateThumbnail(bookmarkData.url, true);
+
+      // Update the bookmark with the new thumbnail
+      const updateData = {
+        thumbnail: thumbnailResult.thumbnail,
+        updatedAt: new Date(),
+      };
+
+      await updateDoc(bookmarkRef, convertBookmarkToFirestore(updateData));
+
+      // Clear caches again after updating bookmark to force fresh fetch
+      this.clearBookmarkCaches();
+
+      return {
+        id,
+        userId,
+        title: bookmarkData.title,
+        url: bookmarkData.url,
+        description: bookmarkData.description || '',
+        tags: bookmarkData.tags || [],
+        favicon: bookmarkData.favicon,
+        thumbnail: thumbnailResult.thumbnail,
+        createdAt: bookmarkData.createdAt?.toDate() || new Date(),
+        updatedAt: updateData.updatedAt,
+      };
+    } catch (error) {
+      const userMessage = handleError(error, 'regenerateThumbnail');
+      throw new Error(userMessage);
+    }
+  }
 }
 
 export const bookmarkService = new BookmarkService();
