@@ -102,6 +102,8 @@ export const BookmarkApp: React.FC = () => {
         const message =
           error instanceof Error ? error.message : "An error occurred";
         showToast("error", message);
+        // Re-throw the error so the modal knows to stay open
+        throw error;
       } finally {
         setModalLoading(false);
       }

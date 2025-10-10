@@ -227,9 +227,14 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
 
     try {
       await onSubmit(formData);
+      // Only close the modal if submission was successful
+      // If there's an error, it will be caught and the modal stays open
       onClose();
-    } catch {
-      // Error handling is done in the parent component
+    } catch (error) {
+      // Error handling is done in the parent component via toast
+      // Keep the modal open so user can fix the issue
+      // The form data is preserved in the formData state
+      console.error("Error submitting bookmark:", error);
     }
   };
 
@@ -362,9 +367,18 @@ export const BookmarkModal: React.FC<BookmarkModalProps> = ({
                     description: e.target.value,
                   }))
                 }
-                className="input-field resize-none"
+                className={clsx(
+                  "input-field resize-none",
+                  errors.description &&
+                    "border-red-500 focus:border-red-500 focus:ring-red-500"
+                )}
                 placeholder="Optional description"
               />
+              {errors.description && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.description}
+                </p>
+              )}
             </div>
 
             {/* Tags */}

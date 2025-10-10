@@ -17,9 +17,9 @@ export const validateUrl = (url: string): { isValid: boolean; sanitizedUrl?: str
     return { isValid: false, error: 'URL cannot be empty' };
   }
 
-  // Check for basic URL structure
+  // Check for basic URL structure - must have at least one dot and reasonable length
   if (!trimmedUrl.includes('.') || trimmedUrl.length < 4) {
-    return { isValid: false, error: 'Invalid URL format' };
+    return { isValid: false, error: 'URL must contain a valid domain (e.g., example.com)' };
   }
 
   try {
@@ -29,12 +29,21 @@ export const validateUrl = (url: string): { isValid: boolean; sanitizedUrl?: str
       normalizedUrl = `https://${normalizedUrl}`;
     }
 
-    // Validate URL structure
+    // Try to parse the URL - this validates the overall structure
+    // The URL constructor is strict and will throw on invalid URLs
     const urlObj = new URL(normalizedUrl);
     
-    // Security checks
+    // Security checks - only allow HTTP and HTTPS protocols
     if (!['http:', 'https:'].includes(urlObj.protocol)) {
-      return { isValid: false, error: 'Only HTTP and HTTPS URLs are allowed' };
+      return { 
+        isValid: false, 
+        error: `Only HTTP and HTTPS URLs are allowed. Protocol '${urlObj.protocol}' is not supported.` 
+      };
+    }
+
+    // Validate hostname exists and is not empty
+    if (!urlObj.hostname || urlObj.hostname.length < 1) {
+      return { isValid: false, error: 'URL must contain a valid hostname' };
     }
 
     // Prevent localhost/private IP access in production
@@ -43,24 +52,46 @@ export const validateUrl = (url: string): { isValid: boolean; sanitizedUrl?: str
       
       // Block localhost
       if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
-        return { isValid: false, error: 'Localhost URLs are not allowed' };
+        return { isValid: false, error: 'Localhost URLs are not allowed in production' };
       }
       
-      // Block private IP ranges
+      // Block private IP ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x)
       const privateIpRegex = /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/;
       if (privateIpRegex.test(hostname)) {
-        return { isValid: false, error: 'Private IP addresses are not allowed' };
+        return { isValid: false, error: 'Private IP addresses are not allowed in production' };
       }
     }
 
-    // Limit URL length
+    // Limit URL length for security and database constraints
     if (normalizedUrl.length > 2048) {
-      return { isValid: false, error: 'URL is too long (max 2048 characters)' };
+      return { 
+        isValid: false, 
+        error: `URL is too long (${normalizedUrl.length} characters). Maximum allowed is 2048 characters.` 
+      };
     }
 
+    // URL is valid - return the normalized version (with protocol added if it was missing)
     return { isValid: true, sanitizedUrl: normalizedUrl };
+    
   } catch (error) {
-    return { isValid: false, error: 'Invalid URL format' };
+    // The URL constructor throws a TypeError for malformed URLs
+    // Provide a more helpful error message
+    let errorMessage = 'Invalid URL format. ';
+    
+    if (error instanceof TypeError) {
+      // Try to give more specific guidance based on common issues
+      if (!trimmedUrl.includes('://') && !trimmedUrl.match(/^https?:\/\//i)) {
+        errorMessage += 'Make sure the URL includes a valid domain (e.g., example.com or https://example.com).';
+      } else if (trimmedUrl.includes(' ')) {
+        errorMessage += 'URLs cannot contain spaces. Please remove any spaces from the URL.';
+      } else {
+        errorMessage += 'Please check that the URL is properly formatted.';
+      }
+    } else {
+      errorMessage += 'An unexpected error occurred while validating the URL.';
+    }
+    
+    return { isValid: false, error: errorMessage };
   }
 };
 
@@ -95,20 +126,33 @@ export const validateTag = (tag: string): { isValid: boolean; sanitizedTag?: str
   const sanitized = sanitizeText(tag, 50).toLowerCase();
   
   if (!sanitized) {
-    return { isValid: false, error: 'Tag cannot be empty after sanitization' };
+    return { 
+      isValid: false, 
+      error: 'Tag cannot be empty or contain only special characters that were removed during sanitization' 
+    };
   }
 
   if (sanitized.length < 1) {
-    return { isValid: false, error: 'Tag is too short' };
+    return { isValid: false, error: 'Tag must be at least 1 character long' };
   }
 
   if (sanitized.length > 50) {
-    return { isValid: false, error: 'Tag is too long (max 50 characters)' };
+    return { 
+      isValid: false, 
+      error: `Tag is too long (${sanitized.length} characters). Maximum allowed is 50 characters.` 
+    };
   }
 
   // Only allow alphanumeric, hyphens, and underscores
   if (!/^[a-z0-9_-]+$/.test(sanitized)) {
-    return { isValid: false, error: 'Tag can only contain letters, numbers, hyphens, and underscores' };
+    // Find which characters are invalid
+    const invalidChars = sanitized.match(/[^a-z0-9_-]/g);
+    const uniqueInvalidChars = invalidChars ? [...new Set(invalidChars)].join(', ') : '';
+    
+    return { 
+      isValid: false, 
+      error: `Tag contains invalid characters: ${uniqueInvalidChars}. Only letters, numbers, hyphens (-), and underscores (_) are allowed.` 
+    };
   }
 
   return { isValid: true, sanitizedTag: sanitized };
