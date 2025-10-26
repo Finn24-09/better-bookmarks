@@ -211,15 +211,14 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                   onClick={() => setShowActions(false)}
                 />
 
-                {/* Actions Menu */}
-                <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[180px]">
+                {/* Actions Menu - Fixed positioning to prevent overflow */}
+                <div className="fixed right-2 mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl py-1 min-w-[180px]">
                   <button
                     onClick={() => {
                       openBookmark();
                       setShowActions(false);
                     }}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-                    style={{ color: "var(--text-primary)" }}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
                   >
                     <ExternalLink className="h-4 w-4" />
                     <span>Open</span>
@@ -229,8 +228,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                       onEdit(bookmark);
                       setShowActions(false);
                     }}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
-                    style={{ color: "var(--text-primary)" }}
+                    className="w-full px-3 py-2 text-left text-sm text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2"
                   >
                     <Edit className="h-4 w-4" />
                     <span>Edit</span>
@@ -239,8 +237,7 @@ export const BookmarkCard: React.FC<BookmarkCardProps> = ({
                     <button
                       onClick={handleRegenerateThumbnail}
                       disabled={isRegenerating}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{ color: "var(--text-primary)" }}
+                      className="w-full px-3 py-2 text-left text-sm text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <RefreshCw
                         className={clsx(

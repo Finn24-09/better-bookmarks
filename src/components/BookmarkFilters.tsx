@@ -94,7 +94,7 @@ export const BookmarkFilters: React.FC<BookmarkFiltersProps> = ({
               "flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors duration-200",
               showFilters
                 ? "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200"
-                : "text-black-700 dark:text-blakc-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
             )}
           >
             <Filter className="h-4 w-4" />
