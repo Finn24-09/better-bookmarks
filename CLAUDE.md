@@ -227,9 +227,23 @@ Comprehensive setup guide in [FIREBASE_SETUP.md](FIREBASE_SETUP.md). Must config
 
 6. **Firebase Initialization**: The app allows building with placeholder Firebase config ([src/config/firebase.ts](src/config/firebase.ts)) but shows a configuration error page at runtime if real credentials aren't provided.
 
-7. **Mobile Menu Positioning**: Mobile action menus in BookmarkCard use `fixed` positioning (not `absolute`) to prevent being clipped by card overflow constraints. This ensures the entire menu is visible on mobile devices.
+7. **Mobile Menu Positioning**: Mobile action menus in BookmarkCard use `fixed` positioning with dynamically calculated coordinates to prevent overflow clipping. Implementation details:
+   - Button positioned absolutely in top-right of thumbnail (`absolute top-2 right-2 z-30`)
+   - Menu dropdown rendered outside thumbnail container to avoid `overflow-hidden` clipping
+   - Uses `getBoundingClientRect()` to calculate menu position relative to viewport
+   - Position calculated as: `top: rect.bottom + 4px, right: window.innerWidth - rect.right`
+   - Z-index layering: z-30 (button) → z-40 (backdrop) → z-50 (menu)
+   - Button ref (`useRef<HTMLButtonElement>`) tracks button position for calculation
+   - Full-screen backdrop prevents interaction with other elements when menu is open
+   - This approach ensures menus work for all bookmarks and aren't clipped by card boundaries
 
-8. **Dark Mode Consistency**: The ThemeContext applies the `dark` class to the document root, triggering all `dark:` Tailwind variants. Always use Tailwind's dark mode classes (e.g., `text-gray-900 dark:text-gray-100`) rather than CSS variables for text colors to ensure proper dark mode support. CSS variables are used for backgrounds and borders defined in [src/index.css](src/index.css).
+8. **Dark Mode Configuration (Tailwind CSS v4)**: The project uses **Tailwind CSS v4.1.12**, which has a different configuration approach than v3. In v4, dark mode is configured via CSS using `@custom-variant` instead of JavaScript config. The configuration is in [src/index.css](src/index.css):
+   ```css
+   @custom-variant dark (&:where(.dark, .dark *));
+   ```
+   This enables class-based dark mode where the `dark` class on any parent element activates dark variants. The ThemeContext ([src/contexts/ThemeContext.tsx](src/contexts/ThemeContext.tsx)) applies/removes the `dark` class on the document root, triggering all `dark:` Tailwind variants. This enables manual theme switching independent of system preferences. Tag styling uses semi-transparent backgrounds in dark mode (e.g., `dark:bg-blue-500/20`) with lighter text colors (e.g., `dark:text-blue-300`) for better contrast and readability. Always use Tailwind's dark mode classes rather than CSS variables for text colors. CSS variables are used for backgrounds and borders.
+
+9. **Tailwind CSS v4 Configuration Notes**: Unlike v3, Tailwind v4 uses CSS-first configuration. The [tailwind.config.ts](tailwind.config.ts) file is still used for content paths, theme extensions, and plugins, but dark mode and other variants must be configured in CSS using directives like `@custom-variant`. The `darkMode` option in the JS config is **ignored** in v4. When modifying CSS configuration ([src/index.css](src/index.css)), restart the dev server for changes to take effect.
 
 ## Testing Notes
 

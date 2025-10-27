@@ -1,5 +1,7 @@
 import type { Config } from 'tailwindcss'
 
+// Note: In Tailwind CSS v4, darkMode configuration has moved to CSS
+// See src/index.css for @custom-variant dark configuration
 export default {
   content: [
     "./index.html",

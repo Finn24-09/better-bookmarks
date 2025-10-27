@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Tailwind v4: Configure class-based dark mode */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @keyframes fadeIn {
   0% { opacity: 0; }
   100% { opacity: 1; }
