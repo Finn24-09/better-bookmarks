@@ -22,6 +22,14 @@ interface ThumbnailOptions {
   timeout?: number;
 }
 
+interface ScreenshotApiError {
+  error: string;
+  message: string;
+  statusCode: number;
+  processingTime?: string;
+  timestamp: string;
+}
+
 import { getEnvVarWithFallback } from '../utils/env';
 
 class ThumbnailService {
@@ -206,6 +214,31 @@ class ThumbnailService {
   }
 
   /**
+   * Take a screenshot with retry logic for transient errors
+   */
+  private async takeScreenshotWithRetry(
+    url: string,
+    options: ThumbnailOptions = {},
+    retries: number = 2
+  ): Promise<ThumbnailResult> {
+    try {
+      return await this.takeScreenshot(url, options);
+    } catch (error: any) {
+      const isRetryable = error.message.includes('service temporarily unavailable') ||
+                         error.message.includes('loading timeout');
+
+      if (isRetryable && retries > 0) {
+        // Wait before retry with exponential backoff (2s, 4s)
+        const waitTime = (3 - retries) * 2000;
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        return this.takeScreenshotWithRetry(url, options, retries - 1);
+      }
+
+      throw error;
+    }
+  }
+
+  /**
    * Take a screenshot using the screenshot API with intelligent video thumbnail detection
    */
   private async takeScreenshot(url: string, options: ThumbnailOptions = {}): Promise<ThumbnailResult> {
@@ -244,7 +277,31 @@ class ThumbnailService {
       });
 
       if (!response.ok) {
-        throw new Error(`Screenshot API error: ${response.status} ${response.statusText}`);
+        let errorData: ScreenshotApiError;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = {
+            error: 'Screenshot API error',
+            message: `HTTP ${response.status}: ${response.statusText}`,
+            statusCode: response.status,
+            timestamp: new Date().toISOString()
+          };
+        }
+
+        // Handle specific error codes with appropriate user messages
+        switch (response.status) {
+          case 400:
+            throw new Error(`Invalid request: ${errorData.message}`);
+          case 502:
+            throw new Error(`Unable to reach website: ${errorData.message}`);
+          case 503:
+            throw new Error(`Screenshot service temporarily unavailable: ${errorData.message}`);
+          case 504:
+            throw new Error(`Website loading timeout: ${errorData.message}`);
+          default:
+            throw new Error(`Screenshot failed: ${errorData.message}`);
+        }
       }
 
       const contentType = response.headers.get('content-type');
@@ -288,9 +345,9 @@ class ThumbnailService {
    */
   async generateThumbnail(url: string, options: ThumbnailOptions = {}): Promise<ThumbnailResult> {
     try {
-      // Step 1: Use the new API with intelligent video thumbnail detection first
+      // Step 1: Use the new API with intelligent video thumbnail detection first (with retry)
       try {
-        const apiResult = await this.takeScreenshot(url, options);
+        const apiResult = await this.takeScreenshotWithRetry(url, options);
         return apiResult;
       } catch (screenshotError) {
         // API screenshot failed, continue with fallback methods
