@@ -34,6 +34,8 @@ export const ErrorCategory = {
   NOT_FOUND: 'not_found',
   RATE_LIMIT: 'rate_limit',
   STORAGE: 'storage',
+  SERVICE_UNAVAILABLE: 'service_unavailable',
+  TIMEOUT: 'timeout',
   UNKNOWN: 'unknown'
 } as const;
 
@@ -86,6 +88,8 @@ const CATEGORY_ERROR_MESSAGES: Record<ErrorCategory, string> = {
   [ErrorCategory.NOT_FOUND]: 'The requested resource was not found.',
   [ErrorCategory.RATE_LIMIT]: 'Too many requests. Please wait a moment before trying again.',
   [ErrorCategory.STORAGE]: 'File operation failed. Please try again.',
+  [ErrorCategory.SERVICE_UNAVAILABLE]: 'Service is temporarily unavailable. Please try again later.',
+  [ErrorCategory.TIMEOUT]: 'Request timed out. Please try again.',
   [ErrorCategory.UNKNOWN]: 'An unexpected error occurred. Please try again.',
 };
 
@@ -94,8 +98,23 @@ const CATEGORY_ERROR_MESSAGES: Record<ErrorCategory, string> = {
  */
 export function categorizeError(error: any): ErrorCategory {
   const code = error?.code || '';
-  const message = error?.message || '';
+  const message = (error?.message || '').toLowerCase();
 
+  // Screenshot API specific errors
+  if (message.includes('invalid request') || message.includes('invalid url')) {
+    return ErrorCategory.VALIDATION;
+  }
+  if (message.includes('unable to reach website')) {
+    return ErrorCategory.NETWORK;
+  }
+  if (message.includes('service temporarily unavailable') || message.includes('browser service')) {
+    return ErrorCategory.SERVICE_UNAVAILABLE;
+  }
+  if (message.includes('loading timeout') || message.includes('timeout')) {
+    return ErrorCategory.TIMEOUT;
+  }
+
+  // Firebase errors
   if (code.startsWith('auth/')) return ErrorCategory.AUTHENTICATION;
   if (code.startsWith('storage/')) return ErrorCategory.STORAGE;
   if (code === 'permission-denied') return ErrorCategory.PERMISSION;
@@ -125,7 +144,21 @@ export function getErrorMessage(error: any): string {
 
   // Get the error message
   const message = error?.message || '';
-  
+
+  // Screenshot API specific messages
+  if (message.includes('Invalid request')) {
+    return 'The URL format is invalid. Please check the bookmark URL and try again.';
+  }
+  if (message.includes('Unable to reach website')) {
+    return 'Could not connect to the website. The site may be down or the URL may be incorrect.';
+  }
+  if (message.includes('service temporarily unavailable')) {
+    return 'Screenshot service is temporarily unavailable. Please try again in a moment.';
+  }
+  if (message.includes('loading timeout')) {
+    return 'The website took too long to load. Please try again or check if the site is accessible.';
+  }
+
   // If there's no Firebase error code, this is likely an error from our own validation
   // Pass it through directly since our validation messages are already user-friendly
   if (message && !code) {
@@ -139,7 +172,7 @@ export function getErrorMessage(error: any): string {
       'is not a function',
       'is not defined'
     ];
-    
+
     // If it's not a technical error, pass it through as-is
     if (!technicalPatterns.some(pattern => message.includes(pattern))) {
       return message;
