@@ -29,7 +29,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Set permissions for security (nginx runs as non-root by default on alpine)
 RUN chown -R nginx:nginx /usr/share/nginx/html
@@ -38,6 +38,7 @@ RUN chown -R nginx:nginx /usr/share/nginx/html
 EXPOSE 80
 
 # Healthcheck
-HEALTHCHECK CMD wget -qO- http://localhost:80 || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1/health || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
