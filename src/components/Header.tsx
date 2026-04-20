@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Moon, Sun, Plus, LogOut, User } from "lucide-react";
+import { Search, Moon, Sun, Plus, LogOut, User, Download } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
@@ -10,12 +10,14 @@ interface HeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onAddBookmark: () => void;
+  onExportBookmarks: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   searchQuery,
   onSearchChange,
   onAddBookmark,
+  onExportBookmarks,
 }) => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
@@ -105,6 +107,13 @@ export const Header: React.FC<HeaderProps> = ({
                           {user?.email || "User"}
                         </p>
                       </div>
+                      <button
+                        onClick={() => { onExportBookmarks(); setShowUserMenu(false); }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Export Bookmarks
+                      </button>
                       <button
                         onClick={handleLogout}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -217,6 +226,13 @@ export const Header: React.FC<HeaderProps> = ({
                         {user?.email || "User"}
                       </p>
                     </div>
+                    <button
+                      onClick={() => { onExportBookmarks(); setShowUserMenu(false); }}
+                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <Download className="h-5 w-5 mr-2" />
+                      Export Bookmarks
+                    </button>
                     <button
                       onClick={handleLogout}
                       className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"

@@ -423,6 +423,23 @@ class BookmarkService {
     }
   }
 
+  /**
+   * Returns all bookmarks for the current user without filters or pagination.
+   * Intended for data export. User isolation is enforced by getCachedBookmarks()
+   * via the Firebase query scoped to the authenticated user's ID.
+   */
+  async getAllBookmarksForExport(): Promise<Bookmark[]> {
+    try {
+      const bookmarks = await this.getCachedBookmarks();
+      return [...bookmarks].sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      );
+    } catch (error) {
+      const userMessage = handleError(error, 'getAllBookmarksForExport');
+      throw new Error(userMessage);
+    }
+  }
+
   async getAllTags(): Promise<string[]> {
     const userId = getCurrentUserId();
     const cacheKey = `${this.TAGS_CACHE_KEY}_${userId}`;

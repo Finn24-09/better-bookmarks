@@ -10,6 +10,7 @@ import { EmptyState } from "./EmptyState";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useBookmarks } from "../hooks/useBookmarks";
 import { bookmarkService } from "../services/bookmarkService";
+import { bookmarkExportService } from "../services/bookmarkExportService";
 import { Watermark } from "./Watermark";
 import type {
   Bookmark,
@@ -70,6 +71,21 @@ export const BookmarkApp: React.FC = () => {
     setEditingBookmark(null);
     setIsModalOpen(true);
   }, []);
+
+  const handleExportBookmarks = useCallback(async () => {
+    try {
+      const allBookmarks = await bookmarkService.getAllBookmarksForExport();
+      bookmarkExportService.exportBookmarksAsCSV(allBookmarks);
+      showToast(
+        "success",
+        `Exported ${allBookmarks.length} bookmark${allBookmarks.length !== 1 ? "s" : ""} successfully.`
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Export failed";
+      showToast("error", message);
+    }
+  }, [showToast]);
 
   const handleEditBookmark = useCallback((bookmark: Bookmark) => {
     setEditingBookmark(bookmark);
@@ -244,6 +260,7 @@ export const BookmarkApp: React.FC = () => {
         searchQuery={searchQuery}
         onSearchChange={handleSearchChange}
         onAddBookmark={handleAddBookmark}
+        onExportBookmarks={handleExportBookmarks}
       />
 
       {/* Filters */}
