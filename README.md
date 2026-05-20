@@ -1,5 +1,15 @@
 # Better Bookmarks
 
+> ## ⚠️ DEPRECATED and Archived — This repository is no longer maintained
+>
+> **This project has been superseded by [better-bookmarks2](https://github.com/Finn24-09/better-bookmarks2).** Please use the new version instead.
+>
+> This repository will be **archived** and will not receive any further updates, bug fixes, or security patches. New issues and pull requests will not be reviewed.
+>
+> 👉 **Migrate to [better-bookmarks2](https://github.com/Finn24-09/better-bookmarks2) for the latest features and continued support.**
+
+---
+
 A modern, secure bookmark manager built with React, TypeScript, and Firebase. Organize, search, and manage your bookmarks with ease, featuring intelligent thumbnail generation and a beautiful user interface.
 
 ![Better Bookmarks](src/assets/logo_128x128.png)
@@ -143,18 +153,15 @@ For detailed Firebase setup instructions, see [FIREBASE_SETUP.md](FIREBASE_SETUP
 **Quick Setup Summary:**
 
 1. **Create Firebase Project:**
-
    - Go to [Firebase Console](https://console.firebase.google.com/)
    - Create a new project or select existing one
 
 2. **Enable Services:**
-
    - **Authentication:** Enable Email/Password sign-in
    - **Firestore Database:** Create database in production mode
    - **Storage:** Enable Firebase Storage
 
 3. **Configure Security Rules:**
-
    - Copy rules from [FIREBASE_SETUP.md](FIREBASE_SETUP.md)
    - Apply to both Firestore and Storage
 
